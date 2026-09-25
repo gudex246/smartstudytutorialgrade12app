@@ -1,26 +1,17 @@
 import React, { useState } from 'react';
 import {
   BookOpen,
-  Lock,
   Mail,
   User as UserIcon,
-  Eye,
-  EyeOff,
   ArrowRight,
-  ShieldCheck,
-  GraduationCap,
   Sparkles,
-  CheckCircle2,
   AlertCircle,
   Download,
   Smartphone,
-  Laptop,
   HelpCircle,
-  Share2,
-  Check
+  Share2
 } from 'lucide-react';
 import { User } from '../types';
-import { ADMIN_EMAIL } from '../data/initialData';
 import { authenticateUser } from '../utils/storage';
 
 interface SignInPageProps {
@@ -39,8 +30,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [stream, setStream] = useState<'Natural Science' | 'Social Science'>('Natural Science');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isInstalling, setIsInstalling] = useState(false);
   const [showIOSHint, setShowIOSHint] = useState(false);
@@ -85,14 +74,14 @@ export const SignInPage: React.FC<SignInPageProps> = ({
 
     // Basic email format check
     if (!email.includes('@') || !email.includes('.')) {
-      setErrorMsg('Please enter a valid email address (e.g. student@gmail.com)');
+      setErrorMsg('Please enter a valid email address (e.g. name@gmail.com)');
       return;
     }
 
     try {
       const user = authenticateUser(
         email.trim(),
-        password.trim() || '123456',
+        '123456',
         name.trim(),
         stream
       );
@@ -100,24 +89,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
     } catch (err) {
       setErrorMsg('Sign-in failed. Please try again.');
     }
-  };
-
-  const handleQuickAdmin = () => {
-    const user = authenticateUser(
-      ADMIN_EMAIL,
-      'admin123',
-      'Teacher Guduru Alemayehu (Admin)'
-    );
-    onSignInSuccess(user);
-  };
-
-  const handleQuickStudent = () => {
-    const user = authenticateUser(
-      'student.sample@smartstudy.edu',
-      'student123',
-      'Sample Student (Free Review)'
-    );
-    onSignInSuccess(user);
   };
 
   return (
@@ -225,7 +196,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             
             {/* Full Name */}
             <div>
@@ -259,13 +230,10 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. student@gmail.com (or admin email)"
+                  placeholder="e.g. yourname@gmail.com"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
                 />
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Admin: enter <code className="text-amber-400 font-mono">gudurualemayehu29@gmail.com</code> for Super Admin access
-              </p>
             </div>
 
             {/* Academic Stream */}
@@ -277,39 +245,11 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 id="signin-stream-select"
                 value={stream}
                 onChange={(e) => setStream(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
               >
                 <option value="Natural Science">Grade 12 Natural Science (Maths, Physics, Chem, Bio)</option>
                 <option value="Social Science">Grade 12 Social Science (Maths, Economics, History, Geog)</option>
               </select>
-            </div>
-
-            {/* Optional Password */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Password <span className="text-slate-500 font-normal">(Optional for first entry)</span>
-                </label>
-              </div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  id="signin-password-input"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter or leave blank for quick entry"
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 cursor-pointer p-0.5"
-                  aria-label="Toggle password visibility"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
             </div>
 
             {/* Primary Submit Button */}
@@ -323,49 +263,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
             </button>
           </form>
 
-          {/* Quick 1-Tap Access Buttons */}
-          <div className="mt-6 pt-5 border-t border-slate-800/80 space-y-2.5">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
-              Quick 1-Tap Entrance
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {/* Teacher Guduru Admin Button */}
-              <button
-                type="button"
-                id="quick-admin-login-btn"
-                onClick={handleQuickAdmin}
-                className="p-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-left flex items-center gap-2.5 transition-all cursor-pointer group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div className="truncate">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-amber-300">Teacher Guduru (Admin)</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 truncate">gudurualemayehu29@gmail.com</p>
-                </div>
-              </button>
-
-              {/* Student Free Review Button */}
-              <button
-                type="button"
-                id="quick-student-login-btn"
-                onClick={handleQuickStudent}
-                className="p-2.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-left flex items-center gap-2.5 transition-all cursor-pointer group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
-                  <GraduationCap className="w-4 h-4" />
-                </div>
-                <div className="truncate">
-                  <span className="text-xs font-bold text-indigo-300">Sample Student Demo</span>
-                  <p className="text-[10px] text-slate-400 truncate">Instant Free Review</p>
-                </div>
-              </button>
-            </div>
-          </div>
-
           {/* Access Policy Explainer */}
           <div className="mt-5 p-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
             <div className="flex items-center gap-1.5 text-amber-400 font-semibold">
@@ -373,7 +270,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               <span>Membership & Semester Fee:</span>
             </div>
             <p>
-              • <strong>Super Admin (<code className="text-amber-300 font-mono">gudurualemayehu29@gmail.com</code>):</strong> Full access to manage questions, videos, notes, student subscriptions, and verify payment screenshots.
+              • <strong>Course Instructor & Super Admin:</strong> Full access to manage questions, videos, notes, student subscriptions, and verify payment receipts.
             </p>
             <p>
               • <strong>All Students:</strong> Instant Free Review mode. Unlimited access to all 80+ entrance exam solutions and notes unlocks for <strong>300 ETB / semester</strong> (CBE: 1000521750255 | Telebirr: 0953201048 under Guduru Alemayehu).

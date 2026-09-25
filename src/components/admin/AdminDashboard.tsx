@@ -107,7 +107,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
         <h2 className="text-xl font-bold text-white">Administrator Access Required</h2>
         <p className="text-sm text-slate-300">
-          Only the administrator account (<code className="text-amber-300 font-mono font-bold">{ADMIN_EMAIL}</code>) has permissions to manage exam questions, verify payment receipts, and configure content.
+          Only the authorized course instructor has permissions to manage exam questions, verify payment receipts, and configure content.
         </p>
         <p className="text-xs text-slate-400">
           Your current active account is <span className="font-mono text-indigo-300">{currentUser.email}</span>.
