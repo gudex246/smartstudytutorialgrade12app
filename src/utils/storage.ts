@@ -429,17 +429,31 @@ export function saveTransactions(txs: PaymentTransaction[]): void {
   setStorage(KEYS.TRANSACTIONS, txs);
 }
 
-export function addTransaction(tx: Omit<PaymentTransaction, 'id' | 'createdAt'>): PaymentTransaction {
+export function addTransaction(
+  tx: Omit<PaymentTransaction, 'id' | 'createdAt'> & { id?: string; createdAt?: string }
+): PaymentTransaction {
   const txs = getTransactions();
+  const txId = tx.id || 'tx-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+  const txCreatedAt = tx.createdAt || new Date().toISOString().split('T')[0];
+
   const newTx: PaymentTransaction = {
     ...tx,
-    id: 'tx-' + Date.now(),
-    createdAt: new Date().toISOString().split('T')[0]
+    id: txId,
+    createdAt: txCreatedAt
   };
-  txs.unshift(newTx);
+
+  // Avoid duplicates if matching ID or referenceNo exists
+  const existingIdx = txs.findIndex(
+    (t) => t.id === newTx.id || (t.referenceNo && t.referenceNo === newTx.referenceNo)
+  );
+  if (existingIdx >= 0) {
+    txs[existingIdx] = { ...txs[existingIdx], ...newTx };
+  } else {
+    txs.unshift(newTx);
+  }
   saveTransactions(txs);
 
-  // Immediately send to server API so Admin Guduru Alemayehu receives it on any device
+  // Transmit to server API so Admin Guduru Alemayehu receives it on any device live
   fetch('/api/payments/submit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -448,11 +462,11 @@ export function addTransaction(tx: Omit<PaymentTransaction, 'id' | 'createdAt'>)
     .then((r) => r.json())
     .then((res) => {
       if (res && res.transaction) {
-        console.log('Payment transaction synced to server successfully:', res.transaction.id);
+        console.log('Payment transaction & receipt delivered to server:', res.transaction.id);
       }
     })
     .catch((err) => {
-      console.warn('Network transmission error for payment receipt:', err);
+      console.warn('Network transmission notice for payment receipt:', err);
     });
 
   return newTx;
@@ -477,15 +491,38 @@ export async function syncServerTransactions(): Promise<{ transactions: PaymentT
       const local = getTransactions();
       const serverTxs: PaymentTransaction[] = data.transactions;
       const map = new Map<string, PaymentTransaction>();
-      // Put server transactions first
-      serverTxs.forEach((t) => map.set(t.id, t));
-      // Put local transactions
+
+      // 1. Map server transactions by ID and referenceNo
+      serverTxs.forEach((t) => {
+        map.set(t.id, t);
+        if (t.referenceNo) map.set(t.referenceNo, t);
+      });
+
+      // 2. Merge local transactions
       local.forEach((t) => {
-        if (!map.has(t.id)) {
+        const found = map.get(t.id) || (t.referenceNo ? map.get(t.referenceNo) : undefined);
+        if (!found) {
           map.set(t.id, t);
+        } else {
+          // If local has screenshotUrl and server was missing it, preserve local screenshotUrl
+          if (!found.screenshotUrl && t.screenshotUrl) {
+            found.screenshotUrl = t.screenshotUrl;
+            found.screenshotName = t.screenshotName;
+          }
         }
       });
-      const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+      // Deduplicate by transaction id
+      const uniqueList: PaymentTransaction[] = [];
+      const seenIds = new Set<string>();
+      map.forEach((tx) => {
+        if (!seenIds.has(tx.id)) {
+          seenIds.add(tx.id);
+          uniqueList.push(tx);
+        }
+      });
+
+      const merged = uniqueList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
       saveTransactions(merged);
 
       if (data.students && Array.isArray(data.students)) {
@@ -630,11 +667,28 @@ export function saveStudents(students: User[]): void {
 }
 
 export function updateStudentSubscription(
-  userId: string,
+  userIdOrEmail: string,
   subscription: User['subscription']
 ): void {
   const students = getStudents();
-  const updated = students.map((s) => (s.id === userId ? { ...s, subscription } : s));
+  const target = (userIdOrEmail || '').trim().toLowerCase();
+  let found = false;
+  const updated = students.map((s) => {
+    if (s.id.toLowerCase() === target || s.email.toLowerCase() === target) {
+      found = true;
+      return { ...s, subscription };
+    }
+    return s;
+  });
+  if (!found) {
+    const current = getCurrentUser();
+    if (current && (current.id.toLowerCase() === target || current.email.toLowerCase() === target)) {
+      updated.unshift({
+        ...current,
+        subscription
+      });
+    }
+  }
   saveStudents(updated);
 }
 

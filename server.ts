@@ -520,6 +520,7 @@ function saveServerStudents(students: ServerStudent[]) {
 app.post('/api/payments/submit', (req, res) => {
   try {
     const {
+      id,
       userId,
       userEmail,
       userName,
@@ -543,47 +544,61 @@ app.post('/api/payments/submit', (req, res) => {
 
     const cleanEmail = userEmail.trim().toLowerCase();
     const resolvedName = (userName && userName.trim()) || cleanEmail.split('@')[0];
+    const txReference = referenceNo || 'TX-' + Math.floor(100000 + Math.random() * 900000);
+    const txId = id || 'tx-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+
+    // Calculate 1 semester expiration (4 months)
+    const expireDate = new Date();
+    expireDate.setMonth(expireDate.getMonth() + 4);
+
+    const activeSub = {
+      status: 'active' as const,
+      planId: planId || 'plan-termly',
+      planName: planName || 'One Semester Pass',
+      amountPaid: Number(amount) || 300,
+      paymentMethod: paymentMethod || 'CBE Bank Transfer (1000521750255)',
+      transactionId: txReference,
+      screenshotUrl: screenshotUrl || '',
+      screenshotName: screenshotName || 'Payment_Receipt.jpg',
+      activatedAt: new Date().toISOString().split('T')[0],
+      expiresAt: expireDate.toISOString().split('T')[0]
+    };
 
     const newTx: ServerTransaction = {
-      id: 'tx-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+      id: txId,
       userId: userId || 'student-' + Date.now(),
       userEmail: cleanEmail,
       userName: resolvedName,
-      planId: planId || 'plan-termly',
-      planName: planName || 'One Semester Pass',
-      amount: Number(amount) || 300,
+      planId: activeSub.planId,
+      planName: activeSub.planName,
+      amount: activeSub.amountPaid,
       currency: currency || 'ETB ',
-      paymentMethod: paymentMethod || 'CBE Bank Transfer (1000521750255)',
-      status: 'pending',
-      referenceNo: referenceNo || 'TX-' + Math.floor(100000 + Math.random() * 900000),
+      paymentMethod: activeSub.paymentMethod,
+      status: 'completed', // Active immediately upon receipt submission
+      referenceNo: txReference,
       screenshotUrl: screenshotUrl || '',
       screenshotName: screenshotName || 'Payment_Receipt.jpg',
       createdAt: createdAt || new Date().toISOString().split('T')[0]
     };
 
-    // Store at the top of transactions list
-    txs.unshift(newTx);
+    // Prevent duplicate entries if already exists by id or referenceNo
+    const existingTxIndex = txs.findIndex(
+      (t) => t.id === newTx.id || (t.referenceNo && t.referenceNo === newTx.referenceNo)
+    );
+    if (existingTxIndex >= 0) {
+      txs[existingTxIndex] = newTx;
+    } else {
+      txs.unshift(newTx);
+    }
     saveServerTransactions(txs);
 
-    // Update student subscription status to pending_verification
-    const pendingSub = {
-      status: 'pending_verification' as const,
-      planId: newTx.planId,
-      planName: newTx.planName,
-      amountPaid: newTx.amount,
-      paymentMethod: newTx.paymentMethod,
-      transactionId: newTx.referenceNo,
-      screenshotUrl: newTx.screenshotUrl,
-      screenshotName: newTx.screenshotName,
-      activatedAt: new Date().toISOString().split('T')[0]
-    };
-
+    // Update student subscription status to ACTIVE immediately
     const sIdx = students.findIndex((s) => s.email.toLowerCase() === cleanEmail);
     if (sIdx >= 0) {
       students[sIdx] = {
         ...students[sIdx],
         name: resolvedName,
-        subscription: pendingSub
+        subscription: activeSub
       };
     } else {
       students.unshift({
@@ -591,18 +606,19 @@ app.post('/api/payments/submit', (req, res) => {
         email: cleanEmail,
         name: resolvedName,
         role: 'student',
-        subscription: pendingSub,
+        subscription: activeSub,
         createdAt: newTx.createdAt
       });
     }
     saveServerStudents(students);
 
-    console.log(`[PAYMENT DELIVERED TO ADMIN] Received payment receipt from ${resolvedName} (${cleanEmail}) for ${newTx.currency}${newTx.amount}`);
+    console.log(`[PAYMENT ACTIVATED & DELIVERED TO ADMIN] Student ${resolvedName} (${cleanEmail}) activated with ${newTx.currency}${newTx.amount}. Receipt stored for Admin Guduru Alemayehu.`);
 
     res.json({
       success: true,
-      message: 'Receipt received successfully and queued for Admin Guduru Alemayehu verification.',
-      transaction: newTx
+      message: 'Payment screenshot received! Your account is now ACTIVE with full semester access. Receipt queued for Admin Guduru Alemayehu.',
+      transaction: newTx,
+      subscription: activeSub
     });
   } catch (err: any) {
     console.error('Error in /api/payments/submit:', err);

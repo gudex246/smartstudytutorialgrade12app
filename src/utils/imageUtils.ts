@@ -18,9 +18,9 @@ export function formatFileSize(bytes: number): string {
 
 export async function processPaymentScreenshot(
   file: File,
-  maxWidth = 1200,
-  maxHeight = 1200,
-  quality = 0.82
+  maxWidth = 960,
+  maxHeight = 960,
+  quality = 0.76
 ): Promise<ProcessedImage> {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {

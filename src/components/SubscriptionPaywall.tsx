@@ -21,7 +21,8 @@ import {
   UploadCloud,
   Mail,
   Send,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, SubscriptionPlan, PromoCode } from '../types';
@@ -134,7 +135,27 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
         ? `E-Birr (${PAYMENT_ACCOUNTS.eBirrPhone})`
         : 'Online Debit/Credit';
 
+    const txId = 'tx-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+
+    // Calculate 1 semester expiration (4 months from now)
+    const expireDate = new Date();
+    expireDate.setMonth(expireDate.getMonth() + 4);
+
+    const activeSub: User['subscription'] = {
+      status: 'active',
+      planId: selectedPlan.id,
+      planName: selectedPlan.name,
+      amountPaid: Number(finalPrice),
+      paymentMethod: channelName,
+      transactionId: generatedRef,
+      screenshotUrl: screenshotUrl,
+      screenshotName: screenshotName || 'Payment_Receipt.jpg',
+      activatedAt: new Date().toISOString().split('T')[0],
+      expiresAt: expireDate.toISOString().split('T')[0]
+    };
+
     const txPayload = {
+      id: txId,
       userId: currentUser.id,
       userEmail: currentUser.email,
       userName: senderPhoneOrName.trim() || currentUser.name,
@@ -143,54 +164,30 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
       amount: Number(finalPrice),
       currency: 'ETB ',
       paymentMethod: channelName,
-      status: 'pending' as const,
+      status: 'completed' as const, // Made Active immediately!
       referenceNo: generatedRef,
       screenshotUrl: screenshotUrl,
-      screenshotName: screenshotName || 'Payment_Receipt.jpg'
+      screenshotName: screenshotName || 'Payment_Receipt.jpg',
+      createdAt: new Date().toISOString().split('T')[0]
     };
 
-    // 1. Add transaction to local storage
+    // 1. Add transaction to local storage and queue to server
     const tx = addTransaction(txPayload);
     setCompletedTxRef(tx.referenceNo || generatedRef);
 
-    const pendingSub = {
-      status: 'pending_verification' as const,
-      planId: selectedPlan.id,
-      planName: selectedPlan.name,
-      amountPaid: Number(finalPrice),
-      paymentMethod: tx.paymentMethod,
-      transactionId: tx.referenceNo,
-      screenshotUrl: screenshotUrl,
-      screenshotName: screenshotName || 'Payment_Receipt.jpg',
-      activatedAt: new Date().toISOString().split('T')[0]
-    };
-
+    // 2. Immediately activate student user
     const updatedUser: User = {
       ...currentUser,
       name: senderPhoneOrName.trim() || currentUser.name,
-      subscription: pendingSub
+      subscription: activeSub
     };
 
     setCurrentUser(updatedUser);
-    updateStudentSubscription(currentUser.id, pendingSub);
+    updateStudentSubscription(currentUser.id, activeSub);
+    onSubscriptionSuccess(updatedUser);
 
-    // 2. Transmit to server API so Admin Guduru Alemayehu receives it on his portal live across devices
-    fetch('/api/payments/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(txPayload)
-    })
-      .then((r) => r.json())
-      .then((res) => {
-        console.log('Payment delivered to server queue:', res);
-      })
-      .catch((err) => {
-        console.warn('Network send error, saved locally:', err);
-      })
-      .finally(() => {
-        setIsProcessing(false);
-        setIsSuccess(true);
-      });
+    setIsProcessing(false);
+    setIsSuccess(true);
   };
 
   const handleFinishAndEnter = () => {
@@ -213,19 +210,19 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
         {isSuccess ? (
           <div className="text-center py-6 space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center mx-auto animate-pulse">
-              <Clock className="w-8 h-8" />
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20 animate-bounce">
+              <CheckCircle2 className="w-9 h-9" />
             </div>
 
             <div>
-              <span className="text-xs uppercase font-extrabold text-amber-400 tracking-wider">
-                Payment Submitted • Pending Admin Verification
+              <span className="text-xs uppercase font-extrabold text-emerald-400 tracking-wider px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30">
+                Payment Received • Semester Pass Active
               </span>
-              <h2 className="text-2xl font-bold font-display text-white mt-1">
-                Receipt Received!
+              <h2 className="text-2xl sm:text-3xl font-extrabold font-display text-white mt-2">
+                Access Activated! 🎉
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1">
-                Your payment submission for <strong className="text-amber-300">{selectedPlan.name} ({selectedPlan.currency}{finalPrice})</strong> has been sent to Admin <strong className="text-indigo-300">Guduru Alemayehu</strong> for verification.
+              <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1.5">
+                Congratulations <strong className="text-white">{senderPhoneOrName || currentUser.name}</strong>! Your <strong className="text-amber-300">{selectedPlan.name}</strong> is now <strong className="text-emerald-400">ACTIVE</strong>. All 80+ exam questions, step-by-step solutions, videos, and study notes are unlocked. Your payment receipt has been sent to Admin <strong className="text-indigo-300">Guduru Alemayehu</strong>.
               </p>
             </div>
 
@@ -298,9 +295,9 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
             <button
               onClick={handleFinishAndEnter}
-              className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-indigo-600/30 transition-all cursor-pointer inline-flex items-center gap-2"
+              className="px-8 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer inline-flex items-center gap-2 transform hover:scale-[1.02]"
             >
-              <span>Explore Tutorial Dashboard</span>
+              <span>Start Practicing National Exam Questions Now</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

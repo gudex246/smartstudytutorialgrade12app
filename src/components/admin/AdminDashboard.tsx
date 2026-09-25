@@ -23,7 +23,9 @@ import {
   Clock,
   Play,
   Check,
-  ShieldAlert
+  ShieldAlert,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 import {
   Question,
@@ -83,7 +85,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const isSuperAdmin = currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
-  const [adminTab, setAdminTab] = useState<'overview' | 'questions' | 'videos' | 'notes' | 'subscriptions'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'receipts' | 'questions' | 'videos' | 'notes' | 'subscriptions'>('overview');
+  const [receiptFilter, setReceiptFilter] = useState<'all' | 'screenshots' | 'cbe' | 'telebirr'>('all');
+  const [subVerificationFilter, setSubVerificationFilter] = useState<'all' | 'screenshots' | 'active' | 'pending'>('all');
 
   // State collections
   const [questions, setQuestions] = useState<Question[]>(getQuestions());
@@ -165,15 +169,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     handleSyncWithServer();
+    let prevTxCount = transactions.length;
+
     const interval = setInterval(() => {
       syncServerTransactions().then((res) => {
         if (res) {
+          if (res.transactions.length > prevTxCount) {
+            const newest = res.transactions[0];
+            setApprovalNotification(`🔔 New payment receipt received from ${newest.userName || 'student'} (${newest.currency || 'ETB '}${newest.amount})!`);
+            prevTxCount = res.transactions.length;
+          }
           setTransactions(res.transactions);
           setStudents(res.students);
           setLastSyncTime(new Date().toLocaleTimeString());
         }
       });
-    }, 7000);
+    }, 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -719,6 +730,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const totalRevenue = transactions.reduce((sum, t) => sum + (t.status === 'completed' ? t.amount : 0), 0);
   const activeSubsCount = students.filter((s) => s.subscription?.status === 'active').length;
   const pendingTransactions = transactions.filter((t) => t.status === 'pending');
+  const transactionsWithScreenshot = transactions.filter((t) => !!t.screenshotUrl);
+
+  const filteredReceipts = useMemo(() => {
+    return transactions.filter((t) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !q ||
+        t.userName.toLowerCase().includes(q) ||
+        t.userEmail.toLowerCase().includes(q) ||
+        (t.referenceNo && t.referenceNo.toLowerCase().includes(q)) ||
+        (t.paymentMethod && t.paymentMethod.toLowerCase().includes(q));
+
+      if (!matchesSearch) return false;
+
+      if (receiptFilter === 'screenshots') {
+        return !!t.screenshotUrl;
+      }
+      if (receiptFilter === 'cbe') {
+        return (t.paymentMethod || '').toLowerCase().includes('cbe');
+      }
+      if (receiptFilter === 'telebirr') {
+        return (t.paymentMethod || '').toLowerCase().includes('telebirr') || (t.paymentMethod || '').toLowerCase().includes('e-birr');
+      }
+      return true;
+    });
+  }, [transactions, searchQuery, receiptFilter]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -785,6 +822,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </button>
 
         <button
+          id="admin-tab-receipts"
+          onClick={() => setAdminTab('receipts')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            adminTab === 'receipts'
+              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+              : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/30'
+          }`}
+        >
+          <Camera className="w-4 h-4" />
+          <span>Payment Screenshots</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-900 text-amber-300 border border-amber-500/40">
+            {transactionsWithScreenshot.length}
+          </span>
+        </button>
+
+        <button
           id="admin-tab-questions"
           onClick={() => setAdminTab('questions')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
@@ -848,17 +901,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {adminTab === 'overview' && (
         <div className="space-y-6">
           {/* Key Metrics Bento */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
               <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
                 <span>Total Questions</span>
                 <Layers className="w-4 h-4 text-indigo-400" />
               </div>
               <p className="text-2xl font-bold text-white">{questions.length}</p>
-              <p className="text-[11px] text-slate-500 mt-1">Across 7 core subjects</p>
+              <p className="text-[11px] text-slate-500 mt-1">7 core subjects</p>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
               <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
                 <span>Video Lessons</span>
                 <Video className="w-4 h-4 text-violet-400" />
@@ -867,7 +920,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <p className="text-[11px] text-slate-500 mt-1">HD Tutorial streaming</p>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
               <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
                 <span>Study Notes</span>
                 <FileText className="w-4 h-4 text-sky-400" />
@@ -876,13 +929,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <p className="text-[11px] text-slate-500 mt-1">Revision cheat sheets</p>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <div
+              onClick={() => setAdminTab('receipts')}
+              className="bg-slate-900 border border-amber-500/40 hover:border-amber-500 rounded-2xl p-4 sm:p-5 cursor-pointer transition-all group shadow-sm hover:shadow-amber-500/10"
+              title="Click to view all student payment screenshots"
+            >
+              <div className="flex items-center justify-between text-amber-400 text-xs mb-2">
+                <span className="font-bold">Screenshots</span>
+                <Camera className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+              </div>
+              <p className="text-2xl font-bold text-amber-300">{transactionsWithScreenshot.length}</p>
+              <p className="text-[11px] text-amber-200/80 mt-1 font-semibold flex items-center gap-1">
+                <span>View student receipts</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </p>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
               <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
-                <span>Active Subscriptions</span>
+                <span>Active Students</span>
                 <Users className="w-4 h-4 text-emerald-400" />
               </div>
               <p className="text-2xl font-bold text-emerald-400">{activeSubsCount}</p>
-              <p className="text-[11px] text-slate-500 mt-1">Total revenue: ${totalRevenue.toFixed(2)}</p>
+              <p className="text-[11px] text-slate-400 mt-1">Revenue: <strong className="text-emerald-300">ETB {totalRevenue.toLocaleString()}</strong></p>
             </div>
           </div>
 
@@ -969,7 +1038,242 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. QUESTIONS TAB */}
+      {/* 2. PAYMENT SCREENSHOTS & TRANSFER RECEIPTS TAB */}
+      {/* ------------------------------------------------------------- */}
+      {adminTab === 'receipts' && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-amber-500/15 via-indigo-950/60 to-slate-900 border-2 border-amber-500/40 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/10">
+                  <Camera className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold font-display text-white">Student Payment Screenshots & Receipts</h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-500 text-slate-950">
+                      {transactionsWithScreenshot.length} Screenshots
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Live inbox for Admin <strong className="text-amber-300 font-mono">gudurualemayehu29@gmail.com</strong> • All CBE & Telebirr receipts uploaded by students across all devices arrive here in real time.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSyncWithServer}
+                  disabled={isSyncing}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-100 transition-colors cursor-pointer shadow-sm"
+                  title="Force check server for any new student receipts"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Syncing...' : 'Check For New Uploads'}</span>
+                </button>
+                <span className="text-[11px] text-slate-400 font-mono bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                  {lastSyncTime}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick stats mini-bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-800">
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-2.5">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Total Recorded Receipts</span>
+                <p className="text-base font-extrabold text-white mt-0.5">{transactions.length}</p>
+              </div>
+              <div className="bg-slate-950/60 border border-amber-500/30 rounded-xl p-2.5">
+                <span className="text-[10px] uppercase font-bold text-amber-400">Screenshots Attached</span>
+                <p className="text-base font-extrabold text-amber-300 mt-0.5">{transactionsWithScreenshot.length}</p>
+              </div>
+              <div className="bg-slate-950/60 border border-emerald-500/30 rounded-xl p-2.5">
+                <span className="text-[10px] uppercase font-bold text-emerald-400">Active Students</span>
+                <p className="text-base font-extrabold text-emerald-300 mt-0.5">{activeSubsCount}</p>
+              </div>
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-2.5">
+                <span className="text-[10px] uppercase font-bold text-indigo-400">Total Fees Collected</span>
+                <p className="text-base font-extrabold text-indigo-300 mt-0.5">ETB {totalRevenue.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Search & Channel Filters */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative flex-1 w-full max-w-sm">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by student name, email, ref..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setReceiptFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  receiptFilter === 'all'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                All ({transactions.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptFilter('screenshots')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  receiptFilter === 'screenshots'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>With Screenshots ({transactionsWithScreenshot.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptFilter('cbe')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  receiptFilter === 'cbe'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                CBE Bank
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptFilter('telebirr')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  receiptFilter === 'telebirr'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                Telebirr
+              </button>
+            </div>
+          </div>
+
+          {/* Cards Grid */}
+          {filteredReceipts.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center mx-auto">
+                <Camera className="w-8 h-8 opacity-80" />
+              </div>
+              <h3 className="text-base font-bold text-white">No Receipts Matching Filter</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                When students upload their CBE or Telebirr screenshots, they appear here live with full zoom inspection tools.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredReceipts.map((tx) => (
+                <div
+                  key={tx.id}
+                  className="bg-slate-900/90 border border-slate-800 hover:border-amber-500/50 rounded-2xl p-4 flex flex-col justify-between transition-all shadow-md group relative overflow-hidden"
+                >
+                  <div className="space-y-3">
+                    {/* Header info */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-sm text-white truncate">{tx.userName}</h4>
+                        <p className="text-[11px] font-mono text-slate-400 truncate">{tx.userEmail}</p>
+                      </div>
+                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase">
+                        Active Pass
+                      </span>
+                    </div>
+
+                    {/* Screenshot Preview Card */}
+                    {tx.screenshotUrl ? (
+                      <div
+                        onClick={() => setInspectingTx(tx)}
+                        className="relative w-full h-44 rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 cursor-pointer group/img"
+                        title="Click to Zoom Screenshot"
+                      >
+                        <img
+                          src={tx.screenshotUrl}
+                          alt="Student payment slip"
+                          className="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-300"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px]">
+                          <span className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Zoom Screenshot</span>
+                          </span>
+                        </div>
+                        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/75 text-[10px] text-white font-mono">
+                          {tx.screenshotName || 'Receipt.jpg'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full h-28 rounded-xl bg-slate-950/60 border border-slate-800/80 flex flex-col items-center justify-center text-slate-500 text-xs p-3 text-center">
+                        <ImageIcon className="w-6 h-6 mb-1 opacity-50" />
+                        <span>No image file attached</span>
+                        <span className="text-[10px] text-slate-600 font-mono mt-0.5">Ref: {tx.referenceNo}</span>
+                      </div>
+                    )}
+
+                    {/* Transaction breakdown */}
+                    <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Transfer Amount:</span>
+                        <span className="font-extrabold text-emerald-400 font-sans">{tx.currency || 'ETB '}{tx.amount}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Plan:</span>
+                        <span className="font-semibold text-indigo-300">{tx.planName}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Channel:</span>
+                        <span className="text-slate-300 truncate max-w-[150px]">{tx.paymentMethod}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                        <span>Date:</span>
+                        <span className="font-mono">{tx.createdAt}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-3 border-t border-slate-800 mt-3 flex items-center gap-2">
+                    {tx.screenshotUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setInspectingTx(tx)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Inspect Receipt</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStudentAccess(tx.userId, 'active')}
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/40 text-xs font-semibold transition-colors cursor-pointer"
+                      title="Revoke access if payment screenshot was rejected or invalid"
+                    >
+                      Revoke Access
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 3. QUESTIONS TAB */}
       {/* ------------------------------------------------------------- */}
       {adminTab === 'questions' && (
         <div className="space-y-4">
@@ -1442,22 +1746,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* PENDING APPROVALS QUEUE (Admin Verification Section) */}
+          {/* STUDENT PAYMENT VERIFICATION & SCREENSHOT QUEUE */}
           <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl p-5 shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center">
-                  <Clock className="w-5 h-5" />
+                  <Camera className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-base text-white">Pending Student Payment Verifications</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-slate-950">
-                      {pendingTransactions.length} Pending
+                    <h3 className="font-bold text-base text-white">Student Payment Receipts & Screenshot Verifications</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950">
+                      {transactions.length} Total Receipts
                     </span>
                   </div>
                   <p className="text-xs text-slate-400">
-                    Live inbox for <strong className="text-indigo-300">gudurualemayehu29@gmail.com</strong> • All student uploads across any device appear here
+                    Live inbox for <strong className="text-indigo-300">gudurualemayehu29@gmail.com</strong> • All student uploads appear here in real time
                   </p>
                 </div>
               </div>
@@ -1479,15 +1783,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {pendingTransactions.length === 0 ? (
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 mb-4 pb-3 border-b border-slate-800 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setSubVerificationFilter('all')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  subVerificationFilter === 'all'
+                    ? 'bg-amber-500 text-slate-950 font-bold'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                All Receipts ({transactions.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubVerificationFilter('screenshots')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                  subVerificationFilter === 'screenshots'
+                    ? 'bg-amber-500 text-slate-950 font-bold'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <Camera className="w-3 h-3" />
+                <span>With Screenshots ({transactionsWithScreenshot.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubVerificationFilter('active')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  subVerificationFilter === 'active'
+                    ? 'bg-emerald-600 text-white font-bold'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                Active Access ({transactions.filter((t) => t.status === 'completed').length})
+              </button>
+              {pendingTransactions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSubVerificationFilter('pending')}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    subVerificationFilter === 'pending'
+                      ? 'bg-amber-500 text-slate-950 font-bold'
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                  }`}
+                >
+                  Pending Review ({pendingTransactions.length})
+                </button>
+              )}
+            </div>
+
+            {transactions.filter((t) => {
+              if (subVerificationFilter === 'screenshots') return !!t.screenshotUrl;
+              if (subVerificationFilter === 'pending') return t.status === 'pending';
+              if (subVerificationFilter === 'active') return t.status === 'completed';
+              return true;
+            }).length === 0 ? (
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-6 text-center text-slate-400 text-xs">
                 <ShieldCheck className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-80" />
-                <p className="font-semibold text-slate-200">No Pending Student Payments</p>
-                <p className="text-slate-500 text-[11px] mt-0.5">All student transfers have been reviewed and verified.</p>
+                <p className="font-semibold text-slate-200">No Student Payments Found for Filter</p>
+                <p className="text-slate-500 text-[11px] mt-0.5">All student transfers and uploaded screenshots appear here.</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {pendingTransactions.map((tx) => (
+                {transactions.filter((t) => {
+                  if (subVerificationFilter === 'screenshots') return !!t.screenshotUrl;
+                  if (subVerificationFilter === 'pending') return t.status === 'pending';
+                  if (subVerificationFilter === 'active') return t.status === 'completed';
+                  return true;
+                }).map((tx) => (
                   <div
                     key={tx.id}
                     className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
@@ -1496,8 +1861,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-sm text-white">{tx.userName}</span>
                         <span className="text-xs text-slate-400">({tx.userEmail})</span>
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">
-                          Awaiting Admin Approval
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
+                          tx.status === 'completed'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {tx.status === 'completed' ? 'Active Semester Access' : 'Pending Verification'}
                         </span>
                       </div>
 
@@ -1540,20 +1909,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleRejectPayment(tx.id)}
-                        className="px-3 py-2 bg-slate-800 hover:bg-rose-900/30 text-rose-300 hover:text-rose-200 border border-slate-700 hover:border-rose-700/50 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-                      >
-                        Reject Transfer
-                      </button>
-
-                      <button
-                        onClick={() => handleApprovePayment(tx.id)}
-                        className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>Verify & Grant Access</span>
-                      </button>
+                      {tx.status === 'completed' ? (
+                        <button
+                          onClick={() => handleRejectPayment(tx.id)}
+                          className="px-3 py-2 bg-slate-800 hover:bg-rose-900/30 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                          title="Revoke access if payment was invalid"
+                        >
+                          Revoke Access
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleRejectPayment(tx.id)}
+                            className="px-3 py-2 bg-slate-800 hover:bg-rose-900/30 text-rose-300 hover:text-rose-200 border border-slate-700 hover:border-rose-700/50 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => handleApprovePayment(tx.id)}
+                            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Verify & Grant Access</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}

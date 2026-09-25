@@ -361,19 +361,19 @@ export const QuestionsView: React.FC<QuestionsViewProps> = ({
                 return (
                   <button
                     key={optIdx}
-                    disabled={isAnswered}
+                    type="button"
                     onClick={() => handleSelectOption(q.id, optIdx)}
-                    className={`p-3 rounded-xl border text-left text-xs sm:text-sm flex items-start gap-3 transition-all cursor-pointer ${optionClass}`}
+                    className={`p-3.5 rounded-xl border text-left text-xs sm:text-sm flex items-start gap-3 transition-all cursor-pointer touch-manipulation active:scale-[0.98] select-none ${optionClass}`}
                   >
                     <span className="w-6 h-6 rounded-lg bg-slate-900/80 border border-slate-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
                       {String.fromCharCode(65 + optIdx)}
                     </span>
-                    <span className="flex-1">{opt}</span>
+                    <span className="flex-1 leading-snug">{opt}</span>
                     {isAnswered && isOptionCorrect && (
-                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                     )}
                     {isAnswered && isOptionSelected && !isOptionCorrect && (
-                      <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     )}
                   </button>
                 );
@@ -668,6 +668,88 @@ export const QuestionsView: React.FC<QuestionsViewProps> = ({
               )}
             </div>
           </div>
+
+          {/* Quick Subject Chips Bar (Thumb-Friendly on Mobile) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none touch-pan-x -mx-1 px-1">
+            <button
+              type="button"
+              onClick={() => handleSelectSubject('All')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer touch-manipulation active:scale-95 ${
+                selectedSubject === 'All'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400'
+                  : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              All Subjects ({questions.length})
+            </button>
+            {ALL_SUBJECTS.map((s) => {
+              const count = questions.filter((q) => {
+                const qSub = q.subject === 'Economics & General' ? 'Economics' : q.subject;
+                if (s === 'Smart Study Model Exam') {
+                  return q.subject === 'Smart Study Model Exam' || q.year?.toLowerCase().includes('model');
+                }
+                return qSub === s;
+              }).length;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => handleSelectSubject(s)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer touch-manipulation active:scale-95 flex items-center gap-1.5 ${
+                    selectedSubject === s
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 ring-1 ring-indigo-400'
+                      : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span>{s === 'Smart Study Model Exam' ? '⭐ Model Exam' : s}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                    selectedSubject === s ? 'bg-indigo-800 text-white' : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quick Year Chips Bar */}
+          {availableYearsData.years.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none touch-pan-x -mx-1 px-1">
+              <span className="text-[11px] text-slate-400 font-semibold shrink-0 mr-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                <span>Exam Year:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => handleSelectYear('All')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer touch-manipulation active:scale-95 ${
+                  selectedYear === 'All'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                    : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                All Years ({availableYearsData.total})
+              </button>
+              {availableYearsData.years.map((y) => {
+                const count = availableYearsData.counts.get(y) || 0;
+                return (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() => handleSelectYear(y)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer touch-manipulation active:scale-95 flex items-center gap-1 ${
+                      selectedYear === y
+                        ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                        : 'bg-slate-900 border border-slate-800 text-amber-300/80 hover:text-amber-200'
+                    }`}
+                  >
+                    <span>{y}</span>
+                    <span className="text-[10px] opacity-75">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Question Cards */}
           <div className="space-y-4">

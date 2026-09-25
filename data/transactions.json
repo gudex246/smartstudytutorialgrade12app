@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "tx-1790318774468-7w76o",
+    "userId": "test-1",
+    "userEmail": "teststudent@gmail.com",
+    "userName": "Test Student",
+    "planId": "plan-termly",
+    "planName": "One Semester Pass",
+    "amount": 300,
+    "currency": "ETB ",
+    "paymentMethod": "CBE",
+    "status": "pending",
+    "referenceNo": "TX-106918",
+    "screenshotUrl": "data:image/jpeg;base64,12345",
+    "screenshotName": "test.jpg",
+    "createdAt": "2026-09-25"
+  }
+]

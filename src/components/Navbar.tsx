@@ -261,61 +261,156 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Mobile Sub-Navigation Bar */}
-        <div className="flex md:hidden items-center justify-around py-2 border-t border-slate-800/80 text-[11px] font-medium">
+        {/* Mobile Top Sub-Navigation Bar */}
+        <div className="flex md:hidden items-center justify-around py-1.5 border-t border-slate-800/80 text-[11px] font-medium gap-1">
           <button
+            type="button"
             onClick={() => setActiveTab('questions')}
-            className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg ${
-              activeTab === 'questions' ? 'text-indigo-400 font-bold' : 'text-slate-400'
+            className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-all cursor-pointer touch-manipulation active:scale-95 flex-1 ${
+              activeTab === 'questions'
+                ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-3.5 h-3.5" />
             <span>Questions</span>
           </button>
           
           <button
+            type="button"
             onClick={() => setActiveTab('videos')}
-            className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg ${
-              activeTab === 'videos' ? 'text-indigo-400 font-bold' : 'text-slate-400'
+            className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-all cursor-pointer touch-manipulation active:scale-95 flex-1 ${
+              activeTab === 'videos'
+                ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <Video className="w-4 h-4" />
+            <Video className="w-3.5 h-3.5" />
             <span>Videos</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('notes')}
-            className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg ${
-              activeTab === 'notes' ? 'text-indigo-400 font-bold' : 'text-slate-400'
+            className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-all cursor-pointer touch-manipulation active:scale-95 flex-1 ${
+              activeTab === 'notes'
+                ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <FileText className="w-4 h-4" />
+            <FileText className="w-3.5 h-3.5" />
             <span>Notes</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('ai-tutor')}
-            className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg ${
-              activeTab === 'ai-tutor' ? 'text-violet-400 font-bold' : 'text-slate-400'
+            className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-all cursor-pointer touch-manipulation active:scale-95 flex-1 ${
+              activeTab === 'ai-tutor'
+                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-bold shadow-md shadow-violet-600/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <Bot className="w-4 h-4" />
+            <Bot className="w-3.5 h-3.5" />
             <span>AI Tutor</span>
           </button>
 
           {isAdmin && (
             <button
+              type="button"
               onClick={() => setActiveTab('admin')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg ${
-                activeTab === 'admin' ? 'text-amber-400 font-bold' : 'text-amber-400/80'
+              className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-all cursor-pointer touch-manipulation active:scale-95 flex-1 ${
+                activeTab === 'admin'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                  : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10'
               }`}
             >
-              <ShieldAlert className="w-4 h-4" />
+              <ShieldAlert className="w-3.5 h-3.5" />
               <span>Admin</span>
             </button>
           )}
         </div>
       </div>
+
+      {/* Mobile Fixed Bottom Navigation Bar (Persistent Thumb-Friendly Access) */}
+      <nav
+        aria-label="Mobile Navigation"
+        className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-slate-900/95 backdrop-blur-xl border-t border-slate-800/90 shadow-2xl py-1.5 px-2 pb-[calc(0.4rem+env(safe-area-inset-bottom,0px))]"
+      >
+        <div className="flex items-center justify-around gap-1 max-w-md mx-auto">
+          <button
+            type="button"
+            id="mobile-bottom-nav-questions"
+            onClick={() => setActiveTab('questions')}
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation active:scale-95 ${
+              activeTab === 'questions'
+                ? 'bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Layers className={`w-4 h-4 ${activeTab === 'questions' ? 'text-white' : 'text-slate-400'}`} />
+            <span className="text-[10px] mt-0.5">Questions</span>
+          </button>
+
+          <button
+            type="button"
+            id="mobile-bottom-nav-videos"
+            onClick={() => setActiveTab('videos')}
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation active:scale-95 ${
+              activeTab === 'videos'
+                ? 'bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Video className={`w-4 h-4 ${activeTab === 'videos' ? 'text-white' : 'text-slate-400'}`} />
+            <span className="text-[10px] mt-0.5">Videos</span>
+          </button>
+
+          <button
+            type="button"
+            id="mobile-bottom-nav-notes"
+            onClick={() => setActiveTab('notes')}
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation active:scale-95 ${
+              activeTab === 'notes'
+                ? 'bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <FileText className={`w-4 h-4 ${activeTab === 'notes' ? 'text-white' : 'text-slate-400'}`} />
+            <span className="text-[10px] mt-0.5">Notes</span>
+          </button>
+
+          <button
+            type="button"
+            id="mobile-bottom-nav-ai"
+            onClick={() => setActiveTab('ai-tutor')}
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation active:scale-95 ${
+              activeTab === 'ai-tutor'
+                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-bold shadow-lg shadow-violet-600/30 ring-1 ring-violet-400'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Bot className={`w-4 h-4 ${activeTab === 'ai-tutor' ? 'text-white' : 'text-violet-400'}`} />
+            <span className="text-[10px] mt-0.5">AI Tutor</span>
+          </button>
+
+          {isAdmin && (
+            <button
+              type="button"
+              id="mobile-bottom-nav-admin"
+              onClick={() => setActiveTab('admin')}
+              className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation active:scale-95 ${
+                activeTab === 'admin'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/30 ring-1 ring-amber-300'
+                  : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10'
+              }`}
+            >
+              <ShieldAlert className="w-4 h-4" />
+              <span className="text-[10px] mt-0.5">Admin</span>
+            </button>
+          )}
+        </div>
+      </nav>
     </header>
   );
 };

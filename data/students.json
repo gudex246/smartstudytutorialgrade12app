@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "test-1",
+    "email": "teststudent@gmail.com",
+    "name": "Test Student",
+    "role": "student",
+    "subscription": {
+      "status": "pending_verification",
+      "planId": "plan-termly",
+      "planName": "One Semester Pass",
+      "amountPaid": 300,
+      "paymentMethod": "CBE",
+      "transactionId": "TX-106918",
+      "screenshotUrl": "data:image/jpeg;base64,12345",
+      "screenshotName": "test.jpg",
+      "activatedAt": "2026-09-25"
+    },
+    "createdAt": "2026-09-25"
+  }
+]
