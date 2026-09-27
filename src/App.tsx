@@ -320,45 +320,14 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer with App Info & Offline PWA badge */}
-      <footer className="border-t border-slate-800/80 bg-slate-950 py-6 text-slate-400 text-xs mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Footer */}
+      <footer className="border-t border-slate-800/80 bg-slate-950 py-5 text-slate-400 text-xs mt-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-[10px]">
+            <div className="w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center text-white font-bold text-[10px]">
               SST
             </div>
-            <span className="font-semibold text-slate-200">Smart Study Tutorial PWA</span>
-            <span className="text-slate-600">•</span>
-            <span>Admin: <strong className="text-indigo-400 font-mono">{ADMIN_EMAIL}</strong></span>
-          </div>
-
-          <div className="flex items-center gap-4 text-[11px] text-slate-500">
-            {activeUser.email && activeUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && (
-              <>
-                <button
-                  onClick={() => setActiveTab('admin')}
-                  className="text-amber-400/80 hover:text-amber-300 underline"
-                >
-                  Admin Panel
-                </button>
-                <span>•</span>
-              </>
-            )}
-            <button
-              onClick={() => setIsInstallModalOpen(true)}
-              className="text-indigo-400 hover:text-indigo-300 font-semibold"
-            >
-              📲 Install App & Questions
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => setIsSubscriptionModalOpen(true)}
-              className="text-slate-400 hover:text-slate-200"
-            >
-              Subscription Plans
-            </button>
-            <span>•</span>
-            <span className="text-emerald-400 font-medium">Offline PWA Ready</span>
+            <span className="font-semibold text-slate-300 text-sm">Smart Study Tutorial</span>
           </div>
         </div>
       </footer>

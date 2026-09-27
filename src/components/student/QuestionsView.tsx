@@ -9,6 +9,7 @@ import {
   Award,
   RotateCcw,
   Lock,
+  Clock,
   ArrowRight,
   ChevronRight,
   ChevronLeft,
@@ -323,20 +324,30 @@ export const QuestionsView: React.FC<QuestionsViewProps> = ({
         {isLocked ? (
           <div className="bg-slate-950/80 border border-amber-500/20 rounded-xl p-5 text-center space-y-2.5">
             <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
-              <Lock className="w-5 h-5" />
+              {user.subscription?.status === 'pending_verification' ? (
+                <Clock className="w-5 h-5 animate-pulse" />
+              ) : (
+                <Lock className="w-5 h-5" />
+              )}
             </div>
             <p className="text-xs sm:text-sm font-bold text-white">
-              Question #{globalIndex + 1} Locked — Free Preview Limit
+              {user.subscription?.status === 'pending_verification'
+                ? `Question #${globalIndex + 1} Pending Teacher Guduru's Verification`
+                : `Question #${globalIndex + 1} Locked — Free Preview Limit`}
             </p>
             <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Free preview allows practicing questions 1 to 5 for every subject. To unlock all questions (6 through 80+), complete video lessons, and curriculum revision notes, activate your semester subscription (300 ETB).
+              {user.subscription?.status === 'pending_verification'
+                ? 'Your payment screenshot is in Teacher Guduru Alemayehu\'s admin queue for verification. Full access will unlock as soon as he approves your transfer slip.'
+                : 'Free preview allows practicing questions 1 to 5 for every subject. To unlock all questions (6 through 80+), complete video lessons, and curriculum revision notes, submit your semester subscription fee receipt (300 ETB).'}
             </p>
             <button
               type="button"
               onClick={onOpenSubscriptionModal}
               className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer hover:from-amber-400 hover:to-amber-500 transition-transform active:scale-95"
             >
-              Unlock Full Access (300 ETB)
+              {user.subscription?.status === 'pending_verification'
+                ? 'View Receipt Status / Speed Up on WhatsApp'
+                : 'Unlock Full Access (300 ETB)'}
             </button>
           </div>
         ) : (
@@ -523,6 +534,36 @@ export const QuestionsView: React.FC<QuestionsViewProps> = ({
 
   return (
     <div className="space-y-6">
+
+      {/* Pending Admin Verification Banner for Student */}
+      {user.subscription?.status === 'pending_verification' && (
+        <div className="bg-gradient-to-r from-amber-500/20 via-slate-900 to-indigo-950/40 border border-amber-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-white">Payment Screenshot Under Verification</h3>
+                <span className="text-[10px] px-2 py-0.2 rounded-full font-bold bg-amber-500/30 text-amber-300">
+                  PENDING APPROVAL
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Teacher Guduru Alemayehu has received your payment slip and is verifying it. All 80+ questions will unlock once approved. In the meantime, questions 1–5 are available for free preview!
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onOpenSubscriptionModal}
+            className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
+          >
+            View Status / Contact Admin
+          </button>
+        </div>
+      )}
       
       {/* Mode Selector & Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl">

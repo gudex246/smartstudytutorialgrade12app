@@ -114,7 +114,7 @@ export const PaymentScreenshotUpload: React.FC<PaymentScreenshotUploadProps> = (
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/jpg,image/webp"
+        accept="image/*,.heic,.jfif"
         onChange={handleInputChange}
         className="hidden"
       />

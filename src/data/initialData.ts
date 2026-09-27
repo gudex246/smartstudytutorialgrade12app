@@ -896,46 +896,50 @@ Differentiation measures the instantaneous rate of change of a quantity. Below a
 
 export const INITIAL_TRANSACTIONS: PaymentTransaction[] = [
   {
-    id: 'tx-101',
-    userId: 'student-demo',
-    userEmail: 'student.sample@smartstudy.edu',
-    userName: 'Sarah Jenkins',
+    id: 'tx-bare-cawe',
+    userId: 'student-bare-cawe',
+    userEmail: 'barecawe@student.smartstudy.edu',
+    userName: 'bare cawe (0953201048)',
     planId: 'plan-termly',
-    planName: 'Semester / Term Pass',
-    amount: 34.99,
-    currency: '$',
-    paymentMethod: 'Credit Card (Stripe)',
-    status: 'completed',
-    referenceNo: 'SST-TX-882910',
-    createdAt: '2026-08-10'
+    planName: 'One Semester Full Pass',
+    amount: 300,
+    currency: 'ETB ',
+    paymentMethod: 'CBE Bank Transfer (1000521750255)',
+    status: 'pending',
+    referenceNo: 'SST-TX-998877',
+    screenshotUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800"><rect width="100%" height="100%" fill="%23f8fafc"/><rect x="20" y="20" width="560" height="760" rx="16" fill="%23ffffff" stroke="%23cbd5e1" stroke-width="2"/><rect x="20" y="20" width="560" height="90" rx="16" fill="%237e22ce"/><text x="50" y="60" fill="%23ffffff" font-family="sans-serif" font-weight="bold" font-size="22">COMMERCIAL BANK OF ETHIOPIA</text><text x="50" y="88" fill="%23e9d5ff" font-family="sans-serif" font-size="14">CBEBirr Transfer Receipt - Customer Advice</text><text x="50" y="160" fill="%2364748b" font-family="sans-serif" font-size="13">TRANSFER DETAILS</text><text x="50" y="195" fill="%23334155" font-family="sans-serif" font-size="15">Sender Student:</text><text x="240" y="195" fill="%230f172a" font-family="sans-serif" font-weight="bold" font-size="16">bare cawe</text><text x="50" y="235" fill="%23334155" font-family="sans-serif" font-size="15">Beneficiary:</text><text x="240" y="235" fill="%230f172a" font-family="sans-serif" font-weight="bold" font-size="16">Guduru Alemayehu</text><text x="50" y="275" fill="%23334155" font-family="sans-serif" font-size="15">CBE Account No:</text><text x="240" y="275" fill="%237e22ce" font-family="monospace" font-weight="bold" font-size="16">1000521750255</text><text x="50" y="315" fill="%23334155" font-family="sans-serif" font-size="15">Transferred Amount:</text><text x="240" y="315" fill="%2316a34a" font-family="sans-serif" font-weight="bold" font-size="22">300.00 ETB</text><text x="50" y="355" fill="%23334155" font-family="sans-serif" font-size="15">Reason / Package:</text><text x="240" y="355" fill="%230f172a" font-family="sans-serif" font-weight="600" font-size="15">One Semester Full Pass</text><text x="50" y="395" fill="%23334155" font-family="sans-serif" font-size="15">Transaction Ref:</text><text x="240" y="395" fill="%232563eb" font-family="monospace" font-weight="bold" font-size="16">SST-TX-998877</text><text x="50" y="435" fill="%23334155" font-family="sans-serif" font-size="15">Transaction Date:</text><text x="240" y="435" fill="%23334155" font-family="sans-serif" font-size="15">2026-09-25 10:35:12</text><rect x="50" y="470" width="500" height="2" fill="%23e2e8f0"/><rect x="50" y="500" width="500" height="80" rx="12" fill="%23fef9c3" stroke="%23facc15"/><text x="70" y="535" fill="%23854d0e" font-family="sans-serif" font-weight="bold" font-size="14">STATUS: COMPLETED ON SENDER BANK</text><text x="70" y="560" fill="%23713f12" font-family="sans-serif" font-size="12">Receipt submitted for Admin verification. Awaiting confirmation by Teacher Guduru.</text><text x="50" y="640" fill="%2394a3b8" font-family="sans-serif" font-size="11">Smart Study Tutorial EUEE Prep • Official Payment Screenshot</text></svg>',
+    screenshotName: 'CBE_Payment_Receipt_bare_cawe.jpg',
+    createdAt: '2026-09-25'
   },
   {
-    id: 'tx-102',
+    id: 'tx-tadesse',
     userId: 'student-2',
     userEmail: 'alex.tadesse@example.com',
-    userName: 'Alex Tadesse',
-    planId: 'plan-annual',
-    planName: 'Annual VIP Mastery',
-    amount: 69.99,
-    currency: '$',
-    paymentMethod: 'Telebirr / Mobile Money',
+    userName: 'Alex Tadesse (0911223344)',
+    planId: 'plan-termly',
+    planName: 'One Semester Full Pass',
+    amount: 300,
+    currency: 'ETB ',
+    paymentMethod: 'Telebirr (0953201048)',
     status: 'completed',
     referenceNo: 'SST-TX-991204',
-    createdAt: '2026-08-12'
+    screenshotUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="700" viewBox="0 0 600 700"><rect width="100%" height="100%" fill="%23f0fdf4"/><rect x="20" y="20" width="560" height="660" rx="16" fill="%23ffffff" stroke="%2386efac" stroke-width="2"/><rect x="20" y="20" width="560" height="85" rx="16" fill="%2316a34a"/><text x="50" y="60" fill="%23ffffff" font-family="sans-serif" font-weight="bold" font-size="22">telebirr Payment Confirmation</text><text x="50" y="85" fill="%23bbf7d0" font-family="sans-serif" font-size="13">Ethio Telecom Mobile Money</text><text x="50" y="150" fill="%23475569" font-family="sans-serif" font-size="14">Recipient: Guduru Alemayehu (0953201048)</text><text x="50" y="190" fill="%23475569" font-family="sans-serif" font-size="14">Amount: 300.00 ETB</text><text x="50" y="230" fill="%23475569" font-family="sans-serif" font-size="14">Txn ID: SST-TX-991204</text><text x="50" y="270" fill="%2315803d" font-family="sans-serif" font-weight="bold" font-size="15">Verified & Approved by Teacher Guduru</text></svg>',
+    screenshotName: 'Telebirr_Receipt_Alex.jpg',
+    createdAt: '2026-09-24'
   },
   {
-    id: 'tx-103',
+    id: 'tx-selam',
     userId: 'student-3',
-    userEmail: 'marcus.vance@school.org',
-    userName: 'Marcus Vance',
-    planId: 'plan-monthly',
-    planName: 'Monthly Pro Pass',
-    amount: 14.99,
-    currency: '$',
-    paymentMethod: 'PayPal',
+    userEmail: 'selamawit.k@gmail.com',
+    userName: 'Selamawit Kebede',
+    planId: 'plan-termly',
+    planName: 'One Semester Full Pass',
+    amount: 300,
+    currency: 'ETB ',
+    paymentMethod: 'CBE Bank (1000521750255)',
     status: 'completed',
     referenceNo: 'SST-TX-338192',
-    createdAt: '2026-08-14'
+    createdAt: '2026-09-20'
   }
 ];
 

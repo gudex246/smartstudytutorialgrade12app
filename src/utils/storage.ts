@@ -55,6 +55,18 @@ function setStorage<T>(key: string, value: T): void {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     console.warn(`Storage quota exceeded or restricted for ${key}:`, e);
+    if (key === KEYS.TRANSACTIONS && Array.isArray(value)) {
+      try {
+        const lightweight = (value as any[]).map((item) =>
+          item.status === 'completed' && item.screenshotUrl && item.screenshotUrl.length > 500
+            ? { ...item, screenshotUrl: '' }
+            : item
+        );
+        window.localStorage.setItem(key, JSON.stringify(lightweight));
+      } catch (inner) {
+        console.warn('Could not save lightweight transactions:', inner);
+      }
+    }
   }
 }
 
@@ -429,6 +441,31 @@ export function saveTransactions(txs: PaymentTransaction[]): void {
   setStorage(KEYS.TRANSACTIONS, txs);
 }
 
+export async function submitPaymentReceiptToServer(
+  tx: PaymentTransaction
+): Promise<{ success: boolean; transaction?: PaymentTransaction; error?: string }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const res = await fetch('/api/payments/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tx),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return { success: false, error: errData.error || `Server returned error (${res.status})` };
+    }
+    const data = await res.json();
+    return { success: true, transaction: data.transaction || tx };
+  } catch (err: any) {
+    console.error('Failed to submit receipt to server:', err);
+    return { success: false, error: err?.message || 'Network connection failed' };
+  }
+}
+
 export function addTransaction(
   tx: Omit<PaymentTransaction, 'id' | 'createdAt'> & { id?: string; createdAt?: string }
 ): PaymentTransaction {
@@ -454,20 +491,11 @@ export function addTransaction(
   saveTransactions(txs);
 
   // Transmit to server API so Admin Guduru Alemayehu receives it on any device live
-  fetch('/api/payments/submit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(newTx)
-  })
-    .then((r) => r.json())
-    .then((res) => {
-      if (res && res.transaction) {
-        console.log('Payment transaction & receipt delivered to server:', res.transaction.id);
-      }
-    })
-    .catch((err) => {
-      console.warn('Network transmission notice for payment receipt:', err);
-    });
+  submitPaymentReceiptToServer(newTx).then((res) => {
+    if (res.success) {
+      console.log('Payment receipt successfully transmitted to Teacher Guduru Alemayehu Admin queue');
+    }
+  });
 
   return newTx;
 }
@@ -484,45 +512,42 @@ export function updateTransactionStatus(
 
 export async function syncServerTransactions(): Promise<{ transactions: PaymentTransaction[]; students: User[] } | null> {
   try {
-    const res = await fetch('/api/payments/transactions');
+    // bypass browser cache on mobile devices
+    const res = await fetch(`/api/payments/transactions?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
     if (!res.ok) return null;
     const data = await res.json();
     if (data.transactions && Array.isArray(data.transactions)) {
-      const local = getTransactions();
       const serverTxs: PaymentTransaction[] = data.transactions;
+      const local = getTransactions();
       const map = new Map<string, PaymentTransaction>();
 
-      // 1. Map server transactions by ID and referenceNo
+      // 1. Server transactions are the primary authority
       serverTxs.forEach((t) => {
         map.set(t.id, t);
-        if (t.referenceNo) map.set(t.referenceNo, t);
       });
 
-      // 2. Merge local transactions
+      // 2. Only preserve local transactions if marked pending and not yet on server
       local.forEach((t) => {
-        const found = map.get(t.id) || (t.referenceNo ? map.get(t.referenceNo) : undefined);
-        if (!found) {
+        if (!map.has(t.id) && t.status === 'pending') {
           map.set(t.id, t);
-        } else {
-          // If local has screenshotUrl and server was missing it, preserve local screenshotUrl
-          if (!found.screenshotUrl && t.screenshotUrl) {
-            found.screenshotUrl = t.screenshotUrl;
-            found.screenshotName = t.screenshotName;
-          }
         }
       });
 
-      // Deduplicate by transaction id
-      const uniqueList: PaymentTransaction[] = [];
-      const seenIds = new Set<string>();
-      map.forEach((tx) => {
-        if (!seenIds.has(tx.id)) {
-          seenIds.add(tx.id);
-          uniqueList.push(tx);
-        }
+      const uniqueList = Array.from(map.values());
+
+      // Sort pending transactions to the very top
+      const merged = uniqueList.sort((a, b) => {
+        if (a.status === 'pending' && b.status !== 'pending') return -1;
+        if (b.status === 'pending' && a.status !== 'pending') return 1;
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
       });
 
-      const merged = uniqueList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
       saveTransactions(merged);
 
       if (data.students && Array.isArray(data.students)) {

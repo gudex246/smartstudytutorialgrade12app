@@ -31,6 +31,7 @@ import {
   getPlans,
   getPromoCodes,
   addTransaction,
+  submitPaymentReceiptToServer,
   updateStudentSubscription,
   setCurrentUser
 } from '../utils/storage';
@@ -63,6 +64,10 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   const [screenshotSize, setScreenshotSize] = useState<string>('');
   const [isReceiptPreviewOpen, setIsReceiptPreviewOpen] = useState<boolean>(false);
   const [senderPhoneOrName, setSenderPhoneOrName] = useState(currentUser.name || '');
+  const [senderPhone, setSenderPhone] = useState('');
+  const [senderEmail, setSenderEmail] = useState(
+    currentUser.email && !currentUser.email.includes('student.sample') ? currentUser.email : ''
+  );
   const [promoInput, setPromoInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [promoError, setPromoError] = useState('');
@@ -107,25 +112,28 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     }
   };
 
-  const handleCompleteSubscription = (e: React.FormEvent) => {
+  const handleCompleteSubscription = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
     if (!screenshotUrl) {
-      setFormError('Please upload your payment screenshot (receipt) so Admin can verify and activate your membership.');
+      setFormError('Please upload your payment screenshot (receipt) so Admin Guduru Alemayehu can verify and activate your membership.');
       return;
     }
 
     if (!senderPhoneOrName.trim()) {
-      setFormError('Please enter your full name or phone number so Admin knows who sent the payment.');
+      setFormError('Please enter your full name so Admin knows who sent the payment.');
+      return;
+    }
+
+    if (!senderPhone.trim()) {
+      setFormError('Please enter your contact phone number (e.g. 0912345678) so Admin can verify your transfer.');
       return;
     }
 
     setIsProcessing(true);
 
-    // Auto-generate internal tracking ID for database consistency (student does not need to enter one)
     const generatedRef = 'SST-' + Math.floor(100000 + Math.random() * 900000);
-
     const channelName =
       paymentChannel === 'cbe'
         ? `CBE Bank (Acc: ${PAYMENT_ACCOUNTS.cbeAccount})`
@@ -136,13 +144,21 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
         : 'Online Debit/Credit';
 
     const txId = 'tx-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-
-    // Calculate 1 semester expiration (4 months from now)
     const expireDate = new Date();
     expireDate.setMonth(expireDate.getMonth() + 4);
 
-    const activeSub: User['subscription'] = {
-      status: 'active',
+    const cleanContactPhone = senderPhone.trim();
+    const cleanStudentName = senderPhoneOrName.trim();
+    const cleanStudentEmail =
+      (senderEmail && senderEmail.trim().toLowerCase()) ||
+      (currentUser.email && !currentUser.email.includes('student.sample') && currentUser.email.trim().toLowerCase()) ||
+      (cleanContactPhone
+        ? cleanContactPhone.replace(/[^0-9]/g, '') + '@telecom.student.et'
+        : cleanStudentName.toLowerCase().replace(/[^a-z0-9]/g, '.') + '@student.smartstudy.edu');
+
+    // Status is strictly pending_verification until Admin Guduru verifies it!
+    const pendingSub: User['subscription'] = {
+      status: 'pending_verification',
       planId: selectedPlan.id,
       planName: selectedPlan.name,
       amountPaid: Number(finalPrice),
@@ -157,43 +173,53 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     const txPayload = {
       id: txId,
       userId: currentUser.id,
-      userEmail: currentUser.email,
-      userName: senderPhoneOrName.trim() || currentUser.name,
+      userEmail: cleanStudentEmail,
+      userName: cleanContactPhone ? `${cleanStudentName} (${cleanContactPhone})` : cleanStudentName,
       planId: selectedPlan.id,
       planName: selectedPlan.name,
       amount: Number(finalPrice),
       currency: 'ETB ',
       paymentMethod: channelName,
-      status: 'completed' as const, // Made Active immediately!
+      status: 'pending' as const, // STRICTLY PENDING UNTIL ADMIN VERIFIES
       referenceNo: generatedRef,
       screenshotUrl: screenshotUrl,
       screenshotName: screenshotName || 'Payment_Receipt.jpg',
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    // 1. Add transaction to local storage and queue to server
-    const tx = addTransaction(txPayload);
-    setCompletedTxRef(tx.referenceNo || generatedRef);
+    // 1. Deliver directly to server API for Admin Guduru Alemayehu
+    const serverResult = await submitPaymentReceiptToServer(txPayload);
+    if (!serverResult.success) {
+      setIsProcessing(false);
+      setFormError(serverResult.error || 'Failed to submit payment receipt to server. Please check your internet connection.');
+      return;
+    }
 
-    // 2. Immediately activate student user
+    // 2. Also register in local client storage so local state is tracked
+    addTransaction(txPayload);
+    setCompletedTxRef(generatedRef);
+
+    // 3. Update current user to pending_verification (DO NOT GRANT FULL ACCESS YET)
     const updatedUser: User = {
       ...currentUser,
-      name: senderPhoneOrName.trim() || currentUser.name,
-      subscription: activeSub
+      name: cleanStudentName,
+      email: cleanStudentEmail,
+      subscription: pendingSub
     };
 
     setCurrentUser(updatedUser);
-    updateStudentSubscription(currentUser.id, activeSub);
-    onSubscriptionSuccess(updatedUser);
+    updateStudentSubscription(currentUser.id, pendingSub);
 
     setIsProcessing(false);
     setIsSuccess(true);
   };
 
   const handleFinishAndEnter = () => {
-    onSubscriptionSuccess(currentUser);
     onClose();
     setIsSuccess(false);
+    if (onFreePreviewContinue) {
+      onFreePreviewContinue();
+    }
   };
 
   return (
@@ -210,19 +236,19 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
         {isSuccess ? (
           <div className="text-center py-6 space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20 animate-bounce">
-              <CheckCircle2 className="w-9 h-9" />
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20 animate-pulse">
+              <Clock className="w-9 h-9" />
             </div>
 
             <div>
-              <span className="text-xs uppercase font-extrabold text-emerald-400 tracking-wider px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30">
-                Payment Received • Semester Pass Active
+              <span className="text-xs uppercase font-extrabold text-amber-400 tracking-wider px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30">
+                Receipt Submitted • Awaiting Admin Verification
               </span>
               <h2 className="text-2xl sm:text-3xl font-extrabold font-display text-white mt-2">
-                Access Activated! 🎉
+                Receipt Queued For Approval! ⏳
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1.5">
-                Congratulations <strong className="text-white">{senderPhoneOrName || currentUser.name}</strong>! Your <strong className="text-amber-300">{selectedPlan.name}</strong> is now <strong className="text-emerald-400">ACTIVE</strong>. All 80+ exam questions, step-by-step solutions, videos, and study notes are unlocked. Your payment receipt has been sent to Admin <strong className="text-indigo-300">Guduru Alemayehu</strong>.
+                Thank you <strong className="text-white">{senderPhoneOrName}</strong>! Your payment screenshot has been sent directly to Admin <strong className="text-amber-300">Guduru Alemayehu</strong> (<span className="text-indigo-300 font-mono text-[11px]">gudurualemayehu29@gmail.com</span>). Once Teacher Guduru inspects and approves your payment slip, all 80+ exam questions and full lessons will be unlocked.
               </p>
             </div>
 
@@ -230,8 +256,14 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
             <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 text-xs text-left max-w-md mx-auto space-y-2">
               <div className="flex justify-between border-b border-slate-800 pb-2">
                 <span className="text-slate-400">Student Name:</span>
-                <span className="text-white font-semibold">{senderPhoneOrName || currentUser.name}</span>
+                <span className="text-white font-semibold">{senderPhoneOrName}</span>
               </div>
+              {senderPhone && (
+                <div className="flex justify-between border-b border-slate-800 pb-2">
+                  <span className="text-slate-400">Contact Phone:</span>
+                  <span className="text-slate-200 font-mono">{senderPhone}</span>
+                </div>
+              )}
               <div className="flex justify-between border-b border-slate-800 pb-2">
                 <span className="text-slate-400">Plan:</span>
                 <span className="text-indigo-400 font-semibold">{selectedPlan.name}</span>
@@ -244,7 +276,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 <span className="text-slate-400">Payment Channel:</span>
                 <span className="text-slate-300">{paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr/E-Birr (0953201048)'}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <span className="text-slate-400">Receipt Screenshot:</span>
                 {screenshotUrl ? (
                   <button
@@ -256,26 +288,32 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                     <span>View Uploaded Screenshot</span>
                   </button>
                 ) : (
-                  <span className="text-emerald-400 font-semibold">Attached</span>
+                  <span className="text-amber-400 font-semibold">Attached</span>
                 )}
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-slate-400">Current Status:</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  Pending Admin Approval
+                </span>
               </div>
             </div>
 
             <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3 max-w-md mx-auto text-left text-[11px] text-amber-200/90 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <span>
-                Your receipt has been delivered directly to Teacher Guduru's admin dashboard queue (gudurualemayehu29@gmail.com). You can also notify him directly to speed up verification.
+                Your receipt has arrived in Teacher Guduru's dashboard queue. Access will automatically unlock as soon as he verifies it. You can speed up verification by notifying him on WhatsApp.
               </span>
             </div>
 
             {/* Direct Teacher Notification Options */}
             <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 max-w-md mx-auto space-y-2 text-center">
               <p className="text-[11px] font-bold text-slate-300">
-                Want immediate activation? Forward receipt details:
+                Speed up verification? Forward receipt details:
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <a
-                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nEmail: ${currentUser.email}\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}`)}`}
+                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect my receipt in your Admin Dashboard and grant semester access.`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
@@ -284,7 +322,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                   <span>Send on WhatsApp</span>
                 </a>
                 <a
-                  href={`mailto:gudurualemayehu29@gmail.com?subject=${encodeURIComponent(`Payment Receipt - ${senderPhoneOrName || currentUser.name} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have submitted my payment receipt for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nEmail: ${currentUser.email}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Method: ${paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr (0953201048)'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease verify and activate my semester access.\nThank you!`)}`}
+                  href={`mailto:gudurualemayehu29@gmail.com?subject=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have uploaded my payment receipt screenshot for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Method: ${paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr (0953201048)'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect and verify in your Admin Dashboard.\nThank you!`)}`}
                   className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Mail className="w-3.5 h-3.5" />
@@ -295,9 +333,9 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
             <button
               onClick={handleFinishAndEnter}
-              className="px-8 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer inline-flex items-center gap-2 transform hover:scale-[1.02]"
+              className="px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white font-bold rounded-xl text-xs sm:text-sm transition-all cursor-pointer inline-flex items-center gap-2"
             >
-              <span>Start Practicing National Exam Questions Now</span>
+              <span>Close & Continue with Free Preview (Questions 1–5 Free)</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -498,24 +536,57 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                   required={true}
                 />
 
-                {/* Student Full Name or Phone */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                    Student Full Name or Phone Number: <span className="text-amber-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={senderPhoneOrName}
-                    onChange={(e) => {
-                      setSenderPhoneOrName(e.target.value);
-                      setFormError('');
-                    }}
-                    placeholder="e.g. Abebe Bikila / 0912345678"
-                    className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 placeholder-slate-500"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Enter the name or phone used during transfer so Admin can instantly recognize your payment.
+                {/* Student Contact Information */}
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Student Full Name: <span className="text-amber-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={senderPhoneOrName}
+                      onChange={(e) => {
+                        setSenderPhoneOrName(e.target.value);
+                        setFormError('');
+                      }}
+                      placeholder="e.g. Bare Cawe"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 placeholder-slate-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Phone Number: <span className="text-amber-400">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={senderPhone}
+                        onChange={(e) => {
+                          setSenderPhone(e.target.value);
+                          setFormError('');
+                        }}
+                        placeholder="e.g. 0912345678"
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 placeholder-slate-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Email Address: <span className="text-slate-500 text-[10px]">(Optional)</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={senderEmail}
+                        onChange={(e) => setSenderEmail(e.target.value)}
+                        placeholder="e.g. barecawe@gmail.com"
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 placeholder-slate-500"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Your name and phone number will be delivered directly with the screenshot to Admin <strong className="text-indigo-300">Guduru Alemayehu</strong> for verification.
                   </p>
                 </div>
               </div>
@@ -573,12 +644,12 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 {isProcessing ? (
                   <>
                     <div className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin"></div>
-                    <span>Uploading Screenshot & Submitting...</span>
+                    <span>Delivering Receipt to Admin Queue...</span>
                   </>
                 ) : (
                   <>
                     <BadgeCheck className="w-4 h-4 text-slate-950" />
-                    <span>Submit Payment Screenshot (ETB {finalPrice})</span>
+                    <span>Send Screenshot for Admin Verification (ETB {finalPrice})</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

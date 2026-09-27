@@ -461,21 +461,20 @@ function ensureDataDir() {
 }
 
 function loadServerTransactions(): ServerTransaction[] {
-  if (memoryTransactions !== null) {
-    return memoryTransactions;
-  }
   ensureDataDir();
   try {
     if (fs.existsSync(TX_FILE)) {
       const data = fs.readFileSync(TX_FILE, 'utf8');
-      memoryTransactions = JSON.parse(data);
-      return memoryTransactions || [];
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        memoryTransactions = parsed;
+        return memoryTransactions;
+      }
     }
   } catch (e) {
     console.warn('Could not read transactions file', e);
   }
-  memoryTransactions = [];
-  return memoryTransactions;
+  return memoryTransactions || [];
 }
 
 function saveServerTransactions(txs: ServerTransaction[]) {
@@ -489,21 +488,20 @@ function saveServerTransactions(txs: ServerTransaction[]) {
 }
 
 function loadServerStudents(): ServerStudent[] {
-  if (memoryStudents !== null) {
-    return memoryStudents;
-  }
   ensureDataDir();
   try {
     if (fs.existsSync(STUDENTS_FILE)) {
       const data = fs.readFileSync(STUDENTS_FILE, 'utf8');
-      memoryStudents = JSON.parse(data);
-      return memoryStudents || [];
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        memoryStudents = parsed;
+        return memoryStudents;
+      }
     }
   } catch (e) {
     console.warn('Could not read students file', e);
   }
-  memoryStudents = [];
-  return memoryStudents;
+  return memoryStudents || [];
 }
 
 function saveServerStudents(students: ServerStudent[]) {
@@ -535,15 +533,14 @@ app.post('/api/payments/submit', (req, res) => {
       createdAt
     } = req.body;
 
-    if (!userEmail) {
-      return res.status(400).json({ error: 'userEmail is required' });
-    }
+    const resolvedName = (userName && userName.trim()) || 'Student';
+    const cleanEmail =
+      (userEmail && userEmail.trim().toLowerCase()) ||
+      resolvedName.toLowerCase().replace(/[^a-z0-9]/g, '.') + '@student.smartstudy.edu';
 
     const txs = loadServerTransactions();
     const students = loadServerStudents();
 
-    const cleanEmail = userEmail.trim().toLowerCase();
-    const resolvedName = (userName && userName.trim()) || cleanEmail.split('@')[0];
     const txReference = referenceNo || 'TX-' + Math.floor(100000 + Math.random() * 900000);
     const txId = id || 'tx-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
 
@@ -551,10 +548,11 @@ app.post('/api/payments/submit', (req, res) => {
     const expireDate = new Date();
     expireDate.setMonth(expireDate.getMonth() + 4);
 
-    const activeSub = {
-      status: 'active' as const,
+    // Subscription status is strictly PENDING until Admin Guduru Alemayehu verifies the screenshot
+    const pendingSub = {
+      status: 'pending_verification' as const,
       planId: planId || 'plan-termly',
-      planName: planName || 'One Semester Pass',
+      planName: planName || 'One Semester Full Pass',
       amountPaid: Number(amount) || 300,
       paymentMethod: paymentMethod || 'CBE Bank Transfer (1000521750255)',
       transactionId: txReference,
@@ -569,12 +567,12 @@ app.post('/api/payments/submit', (req, res) => {
       userId: userId || 'student-' + Date.now(),
       userEmail: cleanEmail,
       userName: resolvedName,
-      planId: activeSub.planId,
-      planName: activeSub.planName,
-      amount: activeSub.amountPaid,
+      planId: pendingSub.planId,
+      planName: pendingSub.planName,
+      amount: pendingSub.amountPaid,
       currency: currency || 'ETB ',
-      paymentMethod: activeSub.paymentMethod,
-      status: 'completed', // Active immediately upon receipt submission
+      paymentMethod: pendingSub.paymentMethod,
+      status: 'pending', // PENDING: Requires Admin Guduru Alemayehu verification
       referenceNo: txReference,
       screenshotUrl: screenshotUrl || '',
       screenshotName: screenshotName || 'Payment_Receipt.jpg',
@@ -592,13 +590,13 @@ app.post('/api/payments/submit', (req, res) => {
     }
     saveServerTransactions(txs);
 
-    // Update student subscription status to ACTIVE immediately
-    const sIdx = students.findIndex((s) => s.email.toLowerCase() === cleanEmail);
+    // Update student subscription status to PENDING_VERIFICATION (not active yet)
+    const sIdx = students.findIndex((s) => s.email.toLowerCase() === cleanEmail || s.id === newTx.userId);
     if (sIdx >= 0) {
       students[sIdx] = {
         ...students[sIdx],
         name: resolvedName,
-        subscription: activeSub
+        subscription: pendingSub
       };
     } else {
       students.unshift({
@@ -606,19 +604,19 @@ app.post('/api/payments/submit', (req, res) => {
         email: cleanEmail,
         name: resolvedName,
         role: 'student',
-        subscription: activeSub,
+        subscription: pendingSub,
         createdAt: newTx.createdAt
       });
     }
     saveServerStudents(students);
 
-    console.log(`[PAYMENT ACTIVATED & DELIVERED TO ADMIN] Student ${resolvedName} (${cleanEmail}) activated with ${newTx.currency}${newTx.amount}. Receipt stored for Admin Guduru Alemayehu.`);
+    console.log(`[PAYMENT SCREENSHOT DELIVERED TO ADMIN] Student ${resolvedName} (${cleanEmail}) submitted ${newTx.currency}${newTx.amount}. Receipt stored for Admin Guduru Alemayehu verification.`);
 
     res.json({
       success: true,
-      message: 'Payment screenshot received! Your account is now ACTIVE with full semester access. Receipt queued for Admin Guduru Alemayehu.',
+      message: 'Payment screenshot submitted! Receipt queued for Admin Guduru Alemayehu to verify and grant access.',
       transaction: newTx,
-      subscription: activeSub
+      subscription: pendingSub
     });
   } catch (err: any) {
     console.error('Error in /api/payments/submit:', err);

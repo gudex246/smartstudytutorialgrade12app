@@ -18,12 +18,14 @@ export function formatFileSize(bytes: number): string {
 
 export async function processPaymentScreenshot(
   file: File,
-  maxWidth = 960,
-  maxHeight = 960,
-  quality = 0.76
+  maxWidth = 800,
+  maxHeight = 800,
+  quality = 0.72
 ): Promise<ProcessedImage> {
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
+    const isImageMime = file.type ? file.type.startsWith('image/') : false;
+    const isImageExt = /\.(jpe?g|png|webp|gif|bmp|svg|heic|jfif)$/i.test(file.name || '');
+    if (!isImageMime && !isImageExt) {
       reject(new Error('Selected file is not an image. Please select a PNG, JPG, or WEBP image.'));
       return;
     }

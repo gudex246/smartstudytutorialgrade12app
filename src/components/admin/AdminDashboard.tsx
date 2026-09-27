@@ -19,6 +19,7 @@ import {
   TrendingUp,
   BookOpen,
   ArrowUpRight,
+  ArrowRight,
   RefreshCw,
   Clock,
   Play,
@@ -793,8 +794,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* Quick Preview As Student Switcher */}
-          <div className="flex items-center gap-3">
+          {/* Header Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              onClick={handleSyncWithServer}
+              disabled={isSyncing}
+              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+              title="Force check server for any new student receipts"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Checking Server...' : 'Check New Uploads'}</span>
+            </button>
+
             <button
               onClick={onPreviewAsStudent}
               className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
@@ -806,6 +817,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* High-Priority Pending Payment Verification Alert Banner */}
+      {pendingTransactions.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-slate-900 border-2 border-amber-500 rounded-3xl p-5 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 font-black flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/30">
+              <Camera className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-base text-white">
+                  {pendingTransactions.length} Student Payment {pendingTransactions.length === 1 ? 'Screenshot' : 'Screenshots'} Awaiting Your Approval!
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                  ACTION REQUIRED
+                </span>
+              </div>
+              <p className="text-xs text-amber-200/90 mt-0.5">
+                Students have submitted CBE / Telebirr payment screenshots. Inspect the receipts and click &quot;Verify &amp; Grant Access&quot; to activate their semester access.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAdminTab('receipts');
+              setReceiptFilter('screenshots');
+            }}
+            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/30 cursor-pointer transition-transform hover:scale-105 shrink-0"
+          >
+            <Eye className="w-4 h-4" />
+            <span>Review Receipts Now ({pendingTransactions.length})</span>
+          </button>
+        </div>
+      )}
 
       {/* Admin Tab Navigation */}
       <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
@@ -832,9 +879,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         >
           <Camera className="w-4 h-4" />
           <span>Payment Screenshots</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-900 text-amber-300 border border-amber-500/40">
-            {transactionsWithScreenshot.length}
-          </span>
+          {pendingTransactions.length > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 animate-bounce">
+              {pendingTransactions.length} Pending
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-900 text-amber-300 border border-amber-500/40">
+              {transactionsWithScreenshot.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -954,6 +1007,105 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <p className="text-[11px] text-slate-400 mt-1">Revenue: <strong className="text-emerald-300">ETB {totalRevenue.toLocaleString()}</strong></p>
             </div>
           </div>
+
+          {/* Pending Payment Verification Cards in Overview */}
+          {pendingTransactions.length > 0 && (
+            <div className="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-5 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">Pending Student Payment Receipts</h3>
+                    <p className="text-[11px] text-slate-400">Inspect screenshot slips and approve access</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminTab('receipts');
+                    setReceiptFilter('screenshots');
+                  }}
+                  className="text-xs text-amber-300 hover:text-amber-200 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>View All in Receipts Tab</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {pendingTransactions.map((tx) => (
+                  <div
+                    key={tx.id}
+                    className="bg-slate-950/80 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
+                      {tx.screenshotUrl ? (
+                        <div
+                          onClick={() => setInspectingTx(tx)}
+                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/50 shrink-0 cursor-pointer relative group"
+                          title="Click to view full screenshot"
+                        >
+                          <img
+                            src={tx.screenshotUrl}
+                            alt="Receipt thumbnail"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Eye className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 text-slate-500">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                      )}
+
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-white truncate">{tx.userName}</span>
+                          <span className="px-2 py-0.2 rounded-full text-[9px] font-extrabold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                            Pending Verification
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-mono truncate">{tx.userEmail}</p>
+                        <div className="flex items-center gap-3 text-xs pt-0.5">
+                          <span className="text-amber-300 font-bold">{tx.currency || 'ETB '}{tx.amount}</span>
+                          <span className="text-slate-400 truncate">{tx.paymentMethod}</span>
+                          {tx.referenceNo && (
+                            <span className="text-[10px] text-indigo-300 font-mono">Ref: {tx.referenceNo}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800">
+                      {tx.screenshotUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setInspectingTx(tx)}
+                          className="flex-1 sm:flex-none px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Inspect Receipt</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleApprovePayment(tx.id)}
+                        className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Approve & Activate</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Quick Actions Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1187,8 +1339,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <h4 className="font-bold text-sm text-white truncate">{tx.userName}</h4>
                         <p className="text-[11px] font-mono text-slate-400 truncate">{tx.userEmail}</p>
                       </div>
-                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase">
-                        Active Pass
+                      <span className={`shrink-0 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border uppercase ${
+                        tx.status === 'pending'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                          : tx.status === 'rejected'
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      }`}>
+                        {tx.status === 'pending' ? 'Needs Verification' : tx.status === 'rejected' ? 'Rejected' : 'Active Pass'}
                       </span>
                     </div>
 
@@ -1250,20 +1408,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <button
                         type="button"
                         onClick={() => setInspectingTx(tx)}
-                        className="flex-1 py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        className="py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        title="Zoom screenshot receipt"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        <span>Inspect Receipt</span>
+                        <span>Inspect</span>
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => handleToggleStudentAccess(tx.userId, 'active')}
-                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/40 text-xs font-semibold transition-colors cursor-pointer"
-                      title="Revoke access if payment screenshot was rejected or invalid"
-                    >
-                      Revoke Access
-                    </button>
+                    {tx.status === 'pending' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleRejectPayment(tx.id)}
+                          className="py-2 px-2.5 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-rose-300 border border-slate-700 hover:border-rose-700/40 text-xs font-semibold transition-colors cursor-pointer"
+                          title="Reject invalid receipt"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApprovePayment(tx.id)}
+                          className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
+                          title="Verify payment and grant full semester access"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Verify & Grant Access</span>
+                        </button>
+                      </>
+                    ) : tx.status === 'completed' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRejectPayment(tx.id)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/40 text-xs font-semibold transition-colors cursor-pointer"
+                        title="Revoke access"
+                      >
+                        Revoke Access
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleApprovePayment(tx.id)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-emerald-700/40 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-600/50 text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        Re-Approve
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
