@@ -22,11 +22,14 @@ import {
   Mail,
   Send,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  Share2,
+  Download,
+  ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, SubscriptionPlan, PromoCode } from '../types';
-import { PAYMENT_ACCOUNTS } from '../data/initialData';
+import { PAYMENT_ACCOUNTS, ADMIN_EMAIL } from '../data/initialData';
 import {
   getPlans,
   getPromoCodes,
@@ -37,6 +40,8 @@ import {
 } from '../utils/storage';
 import { PaymentScreenshotUpload } from './common/PaymentScreenshotUpload';
 import { ReceiptViewerModal } from './common/ReceiptViewerModal';
+import { dataUrlToFile, downloadDataUrl } from '../utils/imageUtils';
+
 
 interface SubscriptionPaywallProps {
   isOpen: boolean;
@@ -89,10 +94,66 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     finalPrice = Math.max(0, Math.round(finalPrice * (1 - appliedPromo.discountPercentage / 100)));
   }
 
+  const [isSharingEmail, setIsSharingEmail] = useState(false);
+  const [emailShareNotice, setEmailShareNotice] = useState<string | null>(null);
+
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     setCopiedItem(label);
     setTimeout(() => setCopiedItem(null), 2000);
+  };
+
+  const handleShareScreenshotToAdminEmail = async () => {
+    setIsSharingEmail(true);
+    setEmailShareNotice(null);
+    try {
+      const fileName = screenshotName || `Payment_Receipt_${senderPhoneOrName.replace(/\s+/g, '_')}.jpg`;
+      const file = dataUrlToFile(screenshotUrl, fileName);
+
+      const channelName =
+        paymentChannel === 'cbe'
+          ? `CBE Bank (1000521750255)`
+          : paymentChannel === 'telebirr'
+          ? `Telebirr (0953201048)`
+          : paymentChannel === 'ebirr'
+          ? `E-Birr (0953201048)`
+          : 'Direct Transfer';
+
+      const shareText = `Hello Teacher Guduru Alemayehu,\n\nHere is my payment receipt screenshot for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ETB ${finalPrice}\nPayment Method: ${channelName}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect the attached screenshot and verify in your Admin Dashboard.\nAdmin Email: ${ADMIN_EMAIL}`;
+
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: `Smart Study Receipt - ${senderPhoneOrName} (ETB ${finalPrice})`,
+          text: shareText,
+          files: [file]
+        });
+        setEmailShareNotice('Screenshot sent via device share menu!');
+      } else if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({
+          title: `Smart Study Receipt - ${senderPhoneOrName} (ETB ${finalPrice})`,
+          text: shareText
+        });
+        setEmailShareNotice('Details shared via device share!');
+      } else {
+        const gmailComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName} (${finalPrice} ETB)`)}&body=${encodeURIComponent(shareText)}`;
+        window.open(gmailComposeUrl, '_blank');
+        setEmailShareNotice(`Opened Gmail compose addressed to ${ADMIN_EMAIL}`);
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        const gmailComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have uploaded my payment receipt screenshot for Smart Study Tutorial.\nStudent: ${senderPhoneOrName}\nPhone: ${senderPhone}\nAmount: ETB ${finalPrice}\nRef: ${completedTxRef}\n\nPlease verify in Admin Dashboard.`)}`;
+        window.open(gmailComposeUrl, '_blank');
+      }
+    } finally {
+      setIsSharingEmail(false);
+    }
+  };
+
+  const handleDownloadScreenshot = () => {
+    if (screenshotUrl) {
+      const fileName = screenshotName || `SmartStudy_Payment_${senderPhoneOrName.replace(/\s+/g, '_')}.jpg`;
+      downloadDataUrl(screenshotUrl, fileName);
+    }
   };
 
   const handleApplyPromo = (e: React.FormEvent) => {
@@ -235,24 +296,24 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
         </button>
 
         {isSuccess ? (
-          <div className="text-center py-6 space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20 animate-pulse">
-              <Clock className="w-9 h-9" />
+          <div className="text-center py-5 space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+              <CheckCircle2 className="w-9 h-9" />
             </div>
 
             <div>
-              <span className="text-xs uppercase font-extrabold text-amber-400 tracking-wider px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30">
-                Receipt Submitted • Awaiting Admin Verification
+              <span className="text-[11px] uppercase font-extrabold text-emerald-400 tracking-wider px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30">
+                Receipt Submitted & Dispatched
               </span>
               <h2 className="text-2xl sm:text-3xl font-extrabold font-display text-white mt-2">
-                Receipt Queued For Approval! ⏳
+                Payment Screenshot Queued! 📸
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1.5">
-                Thank you <strong className="text-white">{senderPhoneOrName}</strong>! Your payment screenshot has been sent directly to Admin <strong className="text-amber-300">Guduru Alemayehu</strong> (<span className="text-indigo-300 font-mono text-[11px]">gudurualemayehu29@gmail.com</span>). Once Teacher Guduru inspects and approves your payment slip, all 80+ exam questions and full lessons will be unlocked.
+              <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1.5 leading-relaxed">
+                Thank you <strong className="text-white">{senderPhoneOrName}</strong>! Your payment screenshot is stored for verification and dispatched to Admin <strong className="text-amber-300">Guduru Alemayehu</strong> (<span className="text-indigo-300 font-mono text-[11px]">{ADMIN_EMAIL}</span>).
               </p>
             </div>
 
-            {/* Receipt Summary */}
+            {/* Receipt Summary Card */}
             <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 text-xs text-left max-w-md mx-auto space-y-2">
               <div className="flex justify-between border-b border-slate-800 pb-2">
                 <span className="text-slate-400">Student Name:</span>
@@ -277,7 +338,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 <span className="text-slate-300">{paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr/E-Birr (0953201048)'}</span>
               </div>
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">Receipt Screenshot:</span>
+                <span className="text-slate-400">Screenshot Status:</span>
                 {screenshotUrl ? (
                   <button
                     type="button"
@@ -292,43 +353,104 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 )}
               </div>
               <div className="flex items-center justify-between pt-1">
-                <span className="text-slate-400">Current Status:</span>
+                <span className="text-slate-400">Verification Status:</span>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
                   Pending Admin Approval
                 </span>
               </div>
             </div>
 
-            <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3 max-w-md mx-auto text-left text-[11px] text-amber-200/90 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <span>
-                Your receipt has arrived in Teacher Guduru's dashboard queue. Access will automatically unlock as soon as he verifies it. You can speed up verification by notifying him on WhatsApp.
-              </span>
-            </div>
-
-            {/* Direct Teacher Notification Options */}
-            <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 max-w-md mx-auto space-y-2 text-center">
-              <p className="text-[11px] font-bold text-slate-300">
-                Speed up verification? Forward receipt details:
+            {/* Direct Mobile Forwarding Options */}
+            <div className="bg-slate-950/90 border border-indigo-500/30 rounded-2xl p-4 max-w-md mx-auto space-y-3 text-center">
+              <div className="flex items-center justify-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <p className="text-xs font-bold text-white">
+                  Send Screenshot To Admin Email Now
+                </p>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                To guarantee instant approval by Teacher Guduru, send your screenshot via your email app or WhatsApp:
               </p>
-              <div className="flex flex-col sm:flex-row gap-2">
+
+              {emailShareNotice && (
+                <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold flex items-center justify-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{emailShareNotice}</span>
+                </div>
+              )}
+
+              {/* Primary 1-Tap Mobile Share Button (Natively attaches file to Gmail/Mail) */}
+              <button
+                type="button"
+                onClick={handleShareScreenshotToAdminEmail}
+                disabled={isSharingEmail}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-indigo-600/30 touch-manipulation active:scale-98"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>{isSharingEmail ? 'Opening Device Share...' : 'Send Screenshot to Admin (Gmail / Mail)'}</span>
+              </button>
+
+              {/* Secondary Quick Action Grid */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {/* Direct WhatsApp Forward */}
                 <a
-                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect my receipt in your Admin Dashboard and grant semester access.`)}`}
+                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect my screenshot in your Admin Dashboard and activate my semester access.`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Smartphone className="w-3.5 h-3.5" />
                   <span>Send on WhatsApp</span>
                 </a>
+
+                {/* Direct Gmail Webmail link */}
                 <a
-                  href={`mailto:gudurualemayehu29@gmail.com?subject=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have uploaded my payment receipt screenshot for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Method: ${paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr (0953201048)'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect and verify in your Admin Dashboard.\nThank you!`)}`}
-                  className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have submitted my payment receipt for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Method: ${paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr (0953201048)'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect in your Admin Dashboard and grant access.\nThank you!`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
                 >
-                  <Mail className="w-3.5 h-3.5" />
-                  <span>Email Teacher Guduru</span>
+                  <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Open Gmail</span>
                 </a>
               </div>
+
+              {/* Utility Row: Save Screenshot to phone & Copy Admin Email */}
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800 text-[11px]">
+                <button
+                  type="button"
+                  onClick={handleDownloadScreenshot}
+                  className="flex items-center gap-1 text-slate-300 hover:text-white py-1 px-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <Download className="w-3 h-3 text-amber-400" />
+                  <span>Save Receipt to Phone</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopy(ADMIN_EMAIL, 'admin-email')}
+                  className="flex items-center gap-1 text-slate-300 hover:text-white py-1 px-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  {copiedItem === 'admin-email' ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span className="text-emerald-400 font-semibold">Email Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-indigo-400" />
+                      <span className="font-mono text-[10px]">{ADMIN_EMAIL}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3 max-w-md mx-auto text-left text-[11px] text-amber-200/90 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <span>
+                Your receipt is queued in Teacher Guduru's dashboard. Your subscription will automatically unlock as soon as he taps verify.
+              </span>
             </div>
 
             <button

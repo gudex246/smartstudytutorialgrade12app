@@ -57,14 +57,20 @@ function setStorage<T>(key: string, value: T): void {
     console.warn(`Storage quota exceeded or restricted for ${key}:`, e);
     if (key === KEYS.TRANSACTIONS && Array.isArray(value)) {
       try {
-        const lightweight = (value as any[]).map((item) =>
-          item.status === 'completed' && item.screenshotUrl && item.screenshotUrl.length > 500
+        const lightweight = (value as any[]).map((item, idx) =>
+          idx > 0 && item.screenshotUrl && item.screenshotUrl.length > 500
             ? { ...item, screenshotUrl: '' }
             : item
         );
         window.localStorage.setItem(key, JSON.stringify(lightweight));
       } catch (inner) {
         console.warn('Could not save lightweight transactions:', inner);
+        try {
+          const minimal = (value as any[]).map((item) => ({ ...item, screenshotUrl: '' }));
+          window.localStorage.setItem(key, JSON.stringify(minimal));
+        } catch {
+          // ignore
+        }
       }
     }
   }

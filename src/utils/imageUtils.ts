@@ -16,42 +16,87 @@ export function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+/**
+ * Converts a base64 dataUrl into a native File object for mobile Web Share API or uploads
+ */
+export function dataUrlToFile(dataUrl: string, fileName = 'Payment_Receipt.jpg'): File {
+  try {
+    const parts = dataUrl.split(',');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const bstr = atob(parts[1] || '');
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], fileName, { type: mime });
+  } catch (err) {
+    console.warn('Could not parse dataUrl to File, returning dummy File', err);
+    return new File([''], fileName, { type: 'image/jpeg' });
+  }
+}
+
+/**
+ * Triggers a native download of the screenshot dataUrl on mobile and desktop
+ */
+export function downloadDataUrl(dataUrl: string, fileName = 'Payment_Receipt.jpg'): void {
+  try {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (err) {
+    console.warn('Failed to trigger download:', err);
+  }
+}
+
 export async function processPaymentScreenshot(
   file: File,
-  maxWidth = 800,
-  maxHeight = 800,
-  quality = 0.72
+  maxWidth = 1000,
+  maxHeight = 1000,
+  quality = 0.75
 ): Promise<ProcessedImage> {
   return new Promise((resolve, reject) => {
-    const isImageMime = file.type ? file.type.startsWith('image/') : false;
-    const isImageExt = /\.(jpe?g|png|webp|gif|bmp|svg|heic|jfif)$/i.test(file.name || '');
-    if (!isImageMime && !isImageExt) {
-      reject(new Error('Selected file is not an image. Please select a PNG, JPG, or WEBP image.'));
+    if (!file) {
+      reject(new Error('No file selected. Please choose a receipt screenshot.'));
       return;
     }
 
     const reader = new FileReader();
 
     reader.onerror = () => {
-      reject(new Error('Failed to read image file'));
+      reject(new Error('Failed to read image file from your device.'));
     };
 
     reader.onload = (e) => {
+      const resultDataUrl = e.target?.result as string;
+      if (!resultDataUrl) {
+        reject(new Error('Empty image data returned from device.'));
+        return;
+      }
+
       const img = new Image();
       img.onerror = () => {
-        // Fallback: resolve with raw base64 dataUrl
-        resolve({
-          dataUrl: e.target?.result as string,
-          fileName: file.name,
-          fileSizeFormatted: formatFileSize(file.size)
-        });
+        // If canvas image load fails (e.g. unknown format), accept dataUrl if it looks like image data
+        if (resultDataUrl.startsWith('data:image/') || file.type.startsWith('image/')) {
+          resolve({
+            dataUrl: resultDataUrl,
+            fileName: file.name || 'Payment_Receipt.jpg',
+            fileSizeFormatted: formatFileSize(file.size)
+          });
+        } else {
+          reject(new Error('Could not render image. Please upload a PNG, JPG, or JPEG screenshot.'));
+        }
       };
 
       img.onload = () => {
         try {
           let { width, height } = img;
 
-          // Scale down if larger than max dimensions
+          // Scale down if larger than max dimensions to save memory & storage on mobile
           if (width > maxWidth || height > maxHeight) {
             const ratio = Math.min(maxWidth / width, maxHeight / height);
             width = Math.round(width * ratio);
@@ -59,14 +104,14 @@ export async function processPaymentScreenshot(
           }
 
           const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
 
           const ctx = canvas.getContext('2d');
           if (!ctx) {
             resolve({
-              dataUrl: e.target?.result as string,
-              fileName: file.name,
+              dataUrl: resultDataUrl,
+              fileName: file.name || 'Payment_Receipt.jpg',
               fileSizeFormatted: formatFileSize(file.size)
             });
             return;
@@ -84,22 +129,23 @@ export async function processPaymentScreenshot(
 
           resolve({
             dataUrl: compressedDataUrl,
-            fileName: file.name,
+            fileName: file.name || 'Payment_Receipt.jpg',
             fileSizeFormatted: formatFileSize(compressedBytes)
           });
         } catch {
-          // Fallback if canvas has issues
+          // Fallback if canvas has issues on some mobile devices
           resolve({
-            dataUrl: e.target?.result as string,
-            fileName: file.name,
+            dataUrl: resultDataUrl,
+            fileName: file.name || 'Payment_Receipt.jpg',
             fileSizeFormatted: formatFileSize(file.size)
           });
         }
       };
 
-      img.src = e.target?.result as string;
+      img.src = resultDataUrl;
     };
 
     reader.readAsDataURL(file);
   });
 }
+

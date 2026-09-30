@@ -2,10 +2,12 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 import { GoogleGenAI, Type } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
+
 
 const app = express();
 const PORT = 3000;
@@ -514,6 +516,182 @@ function saveServerStudents(students: ServerStudent[]) {
   }
 }
 
+const ADMIN_TARGET_EMAIL = 'gudurualemayehu29@gmail.com';
+
+async function sendPaymentReceiptEmailToAdmin(tx: ServerTransaction) {
+  const appBaseUrl = process.env.APP_URL || 'https://ais-pre-oqlj5kjzjqvslrukke4unm-135981601966.europe-west1.run.app';
+  const approvalLink = `${appBaseUrl}/api/payments/quick-approve?txId=${encodeURIComponent(tx.id)}`;
+
+  const subject = `🎓 New Payment Screenshot: ${tx.userName} - ${tx.currency}${tx.amount} (${tx.paymentMethod})`;
+  const textSummary = `Smart Study Tutorial - Student Payment Verification
+Student Name: ${tx.userName}
+Student Contact: ${tx.userEmail}
+Plan: ${tx.planName}
+Amount Paid: ${tx.currency}${tx.amount}
+Payment Channel: ${tx.paymentMethod}
+Transaction Reference: ${tx.referenceNo}
+Date: ${tx.createdAt}
+
+Direct 1-Click Approval Link:
+${approvalLink}
+
+Open Admin Dashboard:
+${appBaseUrl}`;
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 24px; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid #334155;">
+      <div style="text-align: center; border-bottom: 1px solid #334155; padding-bottom: 16px; margin-bottom: 20px;">
+        <h1 style="color: #6366f1; margin: 0; font-size: 22px;">Smart Study Tutorial</h1>
+        <p style="color: #f59e0b; font-size: 13px; font-weight: bold; margin-top: 4px; text-transform: uppercase;">
+          New Student Payment Verification Request
+        </p>
+      </div>
+
+      <div style="background-color: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid #475569;">
+        <h3 style="color: #38bdf8; margin-top: 0; margin-bottom: 12px; font-size: 15px;">Student Transfer Details:</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #cbd5e1;">
+          <tr>
+            <td style="padding: 6px 0; color: #94a3b8; width: 140px;">Student Name:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #ffffff;">${tx.userName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #94a3b8;">Student Email/Phone:</td>
+            <td style="padding: 6px 0; color: #ffffff; font-family: monospace;">${tx.userEmail}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #94a3b8;">Amount Paid:</td>
+            <td style="padding: 6px 0; font-size: 16px; font-weight: bold; color: #f59e0b;">${tx.currency}${tx.amount}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #94a3b8;">Plan:</td>
+            <td style="padding: 6px 0; color: #ffffff;">${tx.planName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #94a3b8;">Payment Method:</td>
+            <td style="padding: 6px 0; color: #ffffff;">${tx.paymentMethod}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #94a3b8;">Transaction Ref:</td>
+            <td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #38bdf8;">${tx.referenceNo}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #94a3b8;">Submitted Date:</td>
+            <td style="padding: 6px 0; color: #cbd5e1;">${tx.createdAt}</td>
+          </tr>
+        </table>
+      </div>
+
+      ${
+        tx.screenshotUrl
+          ? `
+        <div style="background-color: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid #475569; text-align: center;">
+          <h4 style="color: #f59e0b; margin-top: 0; margin-bottom: 12px; font-size: 14px;">Attached Payment Receipt Screenshot:</h4>
+          <div style="max-height: 480px; overflow: hidden; border-radius: 8px; border: 1px solid #334155; margin-bottom: 8px;">
+            <img src="${tx.screenshotUrl.startsWith('data:') ? tx.screenshotUrl : 'cid:receiptImage'}" alt="Payment Receipt Screenshot" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
+          </div>
+          <p style="font-size: 11px; color: #94a3b8; margin: 0;">Screenshot stored securely in Admin Dashboard</p>
+        </div>
+      `
+          : `<p style="color: #ef4444; font-size: 13px;">No screenshot image provided.</p>`
+      }
+
+      <div style="text-align: center; margin-top: 24px;">
+        <a href="${approvalLink}" style="background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block; margin-right: 8px;">
+          ✓ Approve & Grant Student Access
+        </a>
+        <a href="${appBaseUrl}" style="background-color: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">
+          Open Admin Portal
+        </a>
+      </div>
+
+      <div style="margin-top: 24px; border-top: 1px solid #334155; padding-top: 14px; text-align: center; font-size: 11px; color: #64748b;">
+        Smart Study Tutorial • Verified Payment Delivery System for Admin Guduru Alemayehu (${ADMIN_TARGET_EMAIL})
+      </div>
+    </div>
+  `;
+
+  let emailDispatched = false;
+  let deliveryMethod = 'none';
+
+  // 1. If SMTP / Gmail credentials configured, send via nodemailer
+  if (process.env.SMTP_USER || process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: Number(process.env.SMTP_PORT) || 465,
+        secure: process.env.SMTP_SECURE === 'true' || !process.env.SMTP_PORT || process.env.SMTP_PORT === '465',
+        auth: {
+          user: process.env.SMTP_USER || process.env.GMAIL_USER || ADMIN_TARGET_EMAIL,
+          pass: process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS
+        }
+      });
+
+      const attachments: any[] = [];
+      if (tx.screenshotUrl && tx.screenshotUrl.startsWith('data:image/')) {
+        const matches = tx.screenshotUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          attachments.push({
+            filename: tx.screenshotName || 'payment_receipt.jpg',
+            content: Buffer.from(matches[2], 'base64'),
+            contentType: matches[1],
+            cid: 'receiptImage'
+          });
+        }
+      }
+
+      await transporter.sendMail({
+        from: `"Smart Study Tutorial" <${process.env.SMTP_USER || process.env.GMAIL_USER || ADMIN_TARGET_EMAIL}>`,
+        to: ADMIN_TARGET_EMAIL,
+        subject,
+        text: textSummary,
+        html: htmlContent,
+        attachments
+      });
+
+      emailDispatched = true;
+      deliveryMethod = 'smtp';
+      console.log(`[SMTP EMAIL SUCCESS] Delivered payment screenshot to ${ADMIN_TARGET_EMAIL}`);
+    } catch (smtpErr) {
+      console.warn('[SMTP EMAIL FAILED] Falling back to HTTP notification relay:', smtpErr);
+    }
+  }
+
+  // 2. Always trigger HTTP delivery relay to ensure Admin Guduru is notified in real time
+  try {
+    const relayResponse = await fetch(`https://formsubmit.co/ajax/${ADMIN_TARGET_EMAIL}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        _subject: `🎓 New Payment Screenshot: ${tx.userName} (${tx.currency}${tx.amount})`,
+        studentName: tx.userName,
+        studentEmail: tx.userEmail,
+        amount: `${tx.currency}${tx.amount}`,
+        plan: tx.planName,
+        paymentMethod: tx.paymentMethod,
+        referenceNumber: tx.referenceNo,
+        submittedDate: tx.createdAt,
+        screenshotStatus: tx.screenshotUrl ? 'Screenshot Attached & Stored on Server' : 'None',
+        instantApproveLink: approvalLink,
+        adminDashboardLink: appBaseUrl,
+        _template: 'table'
+      })
+    });
+
+    if (relayResponse.ok) {
+      emailDispatched = true;
+      deliveryMethod = deliveryMethod === 'smtp' ? 'smtp+relay' : 'relay';
+      console.log(`[HTTP EMAIL RELAY SUCCESS] Payment notification delivered to ${ADMIN_TARGET_EMAIL}`);
+    }
+  } catch (relayErr) {
+    console.warn('[HTTP EMAIL RELAY NOTICE]', relayErr);
+  }
+
+  return { sent: emailDispatched, method: deliveryMethod };
+}
+
 // 5. Submit Payment & Screenshot (Called by student from any phone/browser)
 app.post('/api/payments/submit', (req, res) => {
   try {
@@ -612,17 +790,112 @@ app.post('/api/payments/submit', (req, res) => {
 
     console.log(`[PAYMENT SCREENSHOT DELIVERED TO ADMIN] Student ${resolvedName} (${cleanEmail}) submitted ${newTx.currency}${newTx.amount}. Receipt stored for Admin Guduru Alemayehu verification.`);
 
+    // Dispatch automated email notification directly to Admin Guduru Alemayehu (gudurualemayehu29@gmail.com)
+    sendPaymentReceiptEmailToAdmin(newTx)
+      .then((emailRes) => {
+        console.log(`[PAYMENT EMAIL NOTIFICATION] Result for ${ADMIN_TARGET_EMAIL}: sent=${emailRes.sent}, method=${emailRes.method}`);
+      })
+      .catch((err) => {
+        console.warn(`[PAYMENT EMAIL NOTIFICATION ERROR]`, err);
+      });
+
     res.json({
       success: true,
       message: 'Payment screenshot submitted! Receipt queued for Admin Guduru Alemayehu to verify and grant access.',
       transaction: newTx,
-      subscription: pendingSub
+      subscription: pendingSub,
+      adminEmailNotified: true,
+      adminEmail: ADMIN_TARGET_EMAIL
     });
   } catch (err: any) {
     console.error('Error in /api/payments/submit:', err);
     res.status(500).json({ error: 'Failed to process payment submission: ' + (err?.message || String(err)) });
   }
 });
+
+// 5b. Quick 1-Click Approve Link (Used from Email notification by Admin Guduru Alemayehu)
+app.get('/api/payments/quick-approve', (req, res) => {
+  try {
+    const txId = req.query.txId as string;
+    if (!txId) {
+      return res.status(400).send('<h1>Missing transaction ID</h1>');
+    }
+
+    const txs = loadServerTransactions();
+    const students = loadServerStudents();
+
+    const tx = txs.find((t) => t.id === txId || t.referenceNo === txId);
+    if (!tx) {
+      return res.status(404).send('<h1>Transaction not found or already verified</h1>');
+    }
+
+    tx.status = 'completed';
+    saveServerTransactions(txs);
+
+    const expireDate = new Date();
+    expireDate.setMonth(expireDate.getMonth() + 4);
+
+    const activeSub = {
+      status: 'active' as const,
+      planId: tx.planId,
+      planName: tx.planName,
+      amountPaid: tx.amount,
+      paymentMethod: tx.paymentMethod,
+      transactionId: tx.referenceNo,
+      screenshotUrl: tx.screenshotUrl,
+      screenshotName: tx.screenshotName,
+      activatedAt: new Date().toISOString().split('T')[0],
+      expiresAt: expireDate.toISOString().split('T')[0]
+    };
+
+    const sIdx = students.findIndex((s) => s.email.toLowerCase() === tx.userEmail.toLowerCase());
+    if (sIdx >= 0) {
+      students[sIdx].subscription = activeSub;
+      saveServerStudents(students);
+    }
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Payment Approved - Smart Study Tutorial</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+            .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; max-width: 480px; width: 100%; padding: 32px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+            .badge { display: inline-block; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); padding: 6px 16px; border-radius: 9999px; font-size: 13px; font-weight: bold; margin-bottom: 16px; }
+            h1 { font-size: 24px; margin: 0 0 12px; color: #ffffff; }
+            p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }
+            .details { background: #0f172a; border-radius: 12px; padding: 16px; text-align: left; font-size: 13px; margin-bottom: 24px; border: 1px solid #334155; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+            .row:last-child { margin-bottom: 0; }
+            .label { color: #64748b; }
+            .val { font-weight: bold; color: #f8fafc; }
+            .btn { display: inline-block; background: #6366f1; color: white; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: bold; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="badge">✓ Payment Verified & Approved</div>
+            <h1>Access Activated!</h1>
+            <p>You have approved student <strong>${tx.userName}</strong>. Full semester membership has been unlocked on their mobile device.</p>
+            <div class="details">
+              <div class="row"><span class="label">Student:</span><span class="val">${tx.userName}</span></div>
+              <div class="row"><span class="label">Amount:</span><span class="val" style="color:#f59e0b;">${tx.currency}${tx.amount}</span></div>
+              <div class="row"><span class="label">Reference:</span><span class="val" style="font-family:monospace;color:#38bdf8;">${tx.referenceNo}</span></div>
+              <div class="row"><span class="label">Expires:</span><span class="val">${expireDate.toISOString().split('T')[0]}</span></div>
+            </div>
+            <a href="/" class="btn">Return to Smart Study Dashboard</a>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (err: any) {
+    console.error('Error in /api/payments/quick-approve:', err);
+    res.status(500).send('<h1>Failed to approve payment</h1>');
+  }
+});
+
 
 // 6. Get All Transactions & Students (Called by Admin Dashboard to view all receipts across all devices)
 app.get('/api/payments/transactions', (req, res) => {
