@@ -464,19 +464,65 @@ function ensureDataDir() {
 
 function loadServerTransactions(): ServerTransaction[] {
   ensureDataDir();
+  let txs: ServerTransaction[] = [];
   try {
     if (fs.existsSync(TX_FILE)) {
       const data = fs.readFileSync(TX_FILE, 'utf8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        memoryTransactions = parsed;
-        return memoryTransactions;
+        txs = parsed;
       }
     }
   } catch (e) {
     console.warn('Could not read transactions file', e);
   }
-  return memoryTransactions || [];
+
+  // Cross-reference with students to ensure every student who uploaded a payment screenshot appears in transactions
+  try {
+    const students = loadServerStudents();
+    let hasNewFromStudents = false;
+    for (const s of students) {
+      if (s.subscription && (s.subscription.screenshotUrl || s.subscription.transactionId)) {
+        const matchingTx = txs.find(
+          (t) =>
+            t.id === s.subscription?.transactionId ||
+            (t.referenceNo && t.referenceNo === s.subscription?.transactionId) ||
+            (t.userEmail && s.email && t.userEmail.toLowerCase() === s.email.toLowerCase()) ||
+            (t.userId && t.userId === s.id)
+        );
+        if (!matchingTx) {
+          txs.push({
+            id: s.subscription.transactionId || ('tx-' + s.id),
+            userId: s.id,
+            userEmail: s.email,
+            userName: s.name,
+            planId: s.subscription.planId || 'plan-termly',
+            planName: s.subscription.planName || 'One Semester Full Pass',
+            amount: s.subscription.amountPaid || 300,
+            currency: 'ETB ',
+            paymentMethod: s.subscription.paymentMethod || 'CBE / Telebirr',
+            status: s.subscription.status === 'active' ? 'completed' : 'pending',
+            referenceNo: s.subscription.transactionId || ('REF-' + s.id),
+            screenshotUrl: s.subscription.screenshotUrl || '',
+            screenshotName: s.subscription.screenshotName || 'Payment_Receipt.jpg',
+            createdAt: s.subscription.activatedAt || s.createdAt || new Date().toISOString().split('T')[0]
+          });
+          hasNewFromStudents = true;
+        } else if (!matchingTx.screenshotUrl && s.subscription.screenshotUrl) {
+          matchingTx.screenshotUrl = s.subscription.screenshotUrl;
+          hasNewFromStudents = true;
+        }
+      }
+    }
+    if (hasNewFromStudents) {
+      saveServerTransactions(txs);
+    }
+  } catch (err) {
+    console.warn('Could not cross-sync students with transactions:', err);
+  }
+
+  memoryTransactions = txs;
+  return memoryTransactions;
 }
 
 function saveServerTransactions(txs: ServerTransaction[]) {
@@ -848,11 +894,25 @@ app.get('/api/payments/quick-approve', (req, res) => {
       expiresAt: expireDate.toISOString().split('T')[0]
     };
 
-    const sIdx = students.findIndex((s) => s.email.toLowerCase() === tx.userEmail.toLowerCase());
+    const sIdx = students.findIndex((s) =>
+      (tx.userEmail && s.email && s.email.toLowerCase() === tx.userEmail.toLowerCase()) ||
+      (tx.userId && s.id === tx.userId) ||
+      (s.subscription && s.subscription.transactionId === tx.referenceNo) ||
+      (tx.userName && s.name && s.name.toLowerCase() === tx.userName.toLowerCase())
+    );
     if (sIdx >= 0) {
       students[sIdx].subscription = activeSub;
-      saveServerStudents(students);
+    } else {
+      students.unshift({
+        id: tx.userId || ('student-' + Date.now()),
+        email: tx.userEmail || 'student@smartstudy.edu',
+        name: tx.userName || 'Student',
+        role: 'student',
+        subscription: activeSub,
+        createdAt: tx.createdAt || new Date().toISOString().split('T')[0]
+      });
     }
+    saveServerStudents(students);
 
     res.send(`
       <!DOCTYPE html>
@@ -915,79 +975,138 @@ app.get('/api/payments/transactions', (req, res) => {
 // 7. Approve Student Payment (Called by Admin Guduru Alemayehu in Admin Dashboard)
 app.post('/api/payments/approve', (req, res) => {
   try {
-    const { txId } = req.body;
-    if (!txId) return res.status(400).json({ error: 'txId is required' });
+    const { txId, studentId } = req.body;
+    if (!txId && !studentId) return res.status(400).json({ error: 'txId or studentId is required' });
 
     const txs = loadServerTransactions();
     const students = loadServerStudents();
 
-    const tx = txs.find((t) => t.id === txId);
-    if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+    let tx = txId ? txs.find((t) => t.id === txId || t.referenceNo === txId) : undefined;
+    let student = studentId ? students.find((s) => s.id === studentId || s.email.toLowerCase() === studentId.toLowerCase()) : undefined;
 
-    tx.status = 'completed';
-    saveServerTransactions(txs);
+    if (!tx && student) {
+      tx = txs.find((t) =>
+        (t.userEmail && student && t.userEmail.toLowerCase() === student.email.toLowerCase()) ||
+        (t.userId && student && t.userId === student.id) ||
+        (student && student.subscription?.transactionId && t.referenceNo === student.subscription.transactionId)
+      );
+    }
+
+    if (!student && tx) {
+      student = students.find((s) =>
+        (tx && tx.userEmail && s.email.toLowerCase() === tx.userEmail.toLowerCase()) ||
+        (tx && tx.userId && s.id === tx.userId) ||
+        (tx && s.subscription && s.subscription.transactionId === tx.referenceNo) ||
+        (tx && tx.userName && s.name && s.name.toLowerCase() === tx.userName.toLowerCase())
+      );
+    }
 
     const expireDate = new Date();
     expireDate.setMonth(expireDate.getMonth() + 4); // 4 months for 1 semester pass
 
     const activeSub = {
       status: 'active' as const,
-      planId: tx.planId,
-      planName: tx.planName,
-      amountPaid: tx.amount,
-      paymentMethod: tx.paymentMethod,
-      transactionId: tx.referenceNo,
-      screenshotUrl: tx.screenshotUrl,
-      screenshotName: tx.screenshotName,
+      planId: tx?.planId || student?.subscription?.planId || 'plan-termly',
+      planName: tx?.planName || student?.subscription?.planName || 'One Semester Full Pass',
+      amountPaid: tx?.amount || student?.subscription?.amountPaid || 300,
+      paymentMethod: tx?.paymentMethod || student?.subscription?.paymentMethod || 'CBE / Telebirr',
+      transactionId: tx?.referenceNo || student?.subscription?.transactionId || ('REF-' + Date.now()),
+      screenshotUrl: tx?.screenshotUrl || student?.subscription?.screenshotUrl || '',
+      screenshotName: tx?.screenshotName || student?.subscription?.screenshotName || 'Payment_Receipt.jpg',
       activatedAt: new Date().toISOString().split('T')[0],
       expiresAt: expireDate.toISOString().split('T')[0]
     };
 
-    const sIdx = students.findIndex((s) => s.email.toLowerCase() === tx.userEmail.toLowerCase());
-    if (sIdx >= 0) {
-      students[sIdx].subscription = activeSub;
-      saveServerStudents(students);
+    if (tx) {
+      tx.status = 'completed';
+      saveServerTransactions(txs);
+    } else if (student) {
+      const newTx: ServerTransaction = {
+        id: student.subscription?.transactionId || ('tx-' + student.id),
+        userId: student.id,
+        userEmail: student.email,
+        userName: student.name,
+        planId: activeSub.planId,
+        planName: activeSub.planName,
+        amount: activeSub.amountPaid,
+        currency: 'ETB ',
+        paymentMethod: activeSub.paymentMethod,
+        status: 'completed',
+        referenceNo: activeSub.transactionId,
+        screenshotUrl: activeSub.screenshotUrl,
+        screenshotName: activeSub.screenshotName,
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      txs.unshift(newTx);
+      saveServerTransactions(txs);
+      tx = newTx;
     }
 
-    console.log(`[PAYMENT APPROVED] Tx ${txId} approved for ${tx.userEmail}`);
+    if (student) {
+      student.subscription = activeSub;
+      saveServerStudents(students);
+    } else if (tx) {
+      const newStudent: ServerStudent = {
+        id: tx.userId || ('student-' + Date.now()),
+        email: tx.userEmail || 'student@smartstudy.edu',
+        name: tx.userName || 'Student',
+        role: 'student',
+        subscription: activeSub,
+        createdAt: tx.createdAt || new Date().toISOString().split('T')[0]
+      };
+      students.unshift(newStudent);
+      saveServerStudents(students);
+      student = newStudent;
+    }
+
+    console.log(`[PAYMENT APPROVED] Access unlocked for ${student?.name || tx?.userName} (${student?.email || tx?.userEmail})`);
 
     res.json({
       success: true,
-      message: `Payment verified. One semester pass activated for ${tx.userName}.`,
-      transaction: tx
+      message: `Payment verified! One semester full access activated for ${student?.name || tx?.userName}.`,
+      transaction: tx,
+      student: student
     });
   } catch (err: any) {
     console.error('Error in /api/payments/approve:', err);
-    res.status(500).json({ error: 'Failed to approve payment' });
+    res.status(500).json({ error: 'Failed to approve payment: ' + (err?.message || String(err)) });
   }
 });
 
 // 8. Reject Student Payment (Called by Admin)
 app.post('/api/payments/reject', (req, res) => {
   try {
-    const { txId } = req.body;
-    if (!txId) return res.status(400).json({ error: 'txId is required' });
+    const { txId, studentId } = req.body;
+    if (!txId && !studentId) return res.status(400).json({ error: 'txId or studentId is required' });
 
     const txs = loadServerTransactions();
     const students = loadServerStudents();
 
-    const tx = txs.find((t) => t.id === txId);
-    if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+    let tx = txId ? txs.find((t) => t.id === txId || t.referenceNo === txId) : undefined;
+    let student = studentId ? students.find((s) => s.id === studentId || s.email.toLowerCase() === studentId.toLowerCase()) : undefined;
 
-    tx.status = 'rejected';
-    saveServerTransactions(txs);
+    if (tx) {
+      tx.status = 'rejected';
+      saveServerTransactions(txs);
+    }
 
-    const sIdx = students.findIndex((s) => s.email.toLowerCase() === tx.userEmail.toLowerCase());
-    if (sIdx >= 0) {
-      students[sIdx].subscription = {
-        status: 'none'
-      };
+    if (student) {
+      student.subscription = { status: 'none' };
       saveServerStudents(students);
+    } else if (tx) {
+      const s = students.find((item) =>
+        (tx && tx.userEmail && item.email.toLowerCase() === tx.userEmail.toLowerCase()) ||
+        (tx && tx.userId && item.id === tx.userId)
+      );
+      if (s) {
+        s.subscription = { status: 'none' };
+        saveServerStudents(students);
+      }
     }
 
     res.json({
       success: true,
-      message: 'Transaction rejected',
+      message: 'Transaction rejected / access revoked',
       transaction: tx
     });
   } catch (err: any) {
@@ -1000,7 +1119,7 @@ app.post('/api/payments/reject', (req, res) => {
 app.get('/api/payments/status', (req, res) => {
   try {
     const email = (req.query.email as string || '').trim().toLowerCase();
-    const userId = req.query.userId as string;
+    const userId = (req.query.userId as string || '').trim();
 
     if (!email && !userId) {
       return res.status(400).json({ error: 'email or userId is required' });
@@ -1014,13 +1133,34 @@ app.get('/api/payments/status', (req, res) => {
 
     const txs = loadServerTransactions();
     const userTxs = txs.filter((t) => 
-      (email && t.userEmail.toLowerCase() === email) || 
-      (userId && t.userId === userId)
+      (email && t.userEmail && t.userEmail.toLowerCase() === email) || 
+      (userId && t.userId && t.userId === userId)
     );
+
+    const hasCompletedTx = userTxs.some((t) => t.status === 'completed');
+
+    let resolvedSub = student?.subscription || null;
+    if (hasCompletedTx) {
+      const completedTx = userTxs.find((t) => t.status === 'completed')!;
+      const expireDate = new Date();
+      expireDate.setMonth(expireDate.getMonth() + 4);
+      resolvedSub = {
+        status: 'active' as const,
+        planId: completedTx.planId || 'plan-termly',
+        planName: completedTx.planName || 'One Semester Full Pass',
+        amountPaid: completedTx.amount || 300,
+        paymentMethod: completedTx.paymentMethod || 'CBE / Telebirr',
+        transactionId: completedTx.referenceNo,
+        screenshotUrl: completedTx.screenshotUrl || '',
+        screenshotName: completedTx.screenshotName || 'Payment_Receipt.jpg',
+        activatedAt: completedTx.createdAt || new Date().toISOString().split('T')[0],
+        expiresAt: expireDate.toISOString().split('T')[0]
+      };
+    }
 
     res.json({
       student: student || null,
-      subscription: student?.subscription || null,
+      subscription: resolvedSub,
       latestTransaction: userTxs[0] || null
     });
   } catch (err: any) {

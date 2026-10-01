@@ -72,6 +72,8 @@ import {
   getTransactions,
   approveStudentPayment,
   rejectStudentPayment,
+  approveStudentDirectly,
+  rejectStudentDirectly,
   syncServerTransactions
 } from '../../utils/storage';
 
@@ -674,14 +676,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleToggleStudentAccess = (studentId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'expired' : 'active';
-    const sub = {
-      status: newStatus as any,
-      planName: newStatus === 'active' ? 'Admin Manual Grant Pass' : undefined,
-      activatedAt: new Date().toISOString().split('T')[0],
-      expiresAt: '2027-01-01'
-    };
-    updateStudentSubscription(studentId, sub);
-    setStudents(getStudents());
+    if (newStatus === 'active') {
+      const res = approveStudentDirectly(studentId);
+      if (res.success) {
+        setStudents(getStudents());
+        setTransactions(getTransactions());
+        setApprovalNotification(`✅ Verified & Granted! One Semester Full Pass activated for ${res.student?.name || 'student'}.`);
+        setTimeout(() => setApprovalNotification(null), 5000);
+      }
+    } else {
+      rejectStudentDirectly(studentId);
+      setStudents(getStudents());
+      setTransactions(getTransactions());
+      setApprovalNotification('⚠️ Student access revoked.');
+      setTimeout(() => setApprovalNotification(null), 4000);
+    }
   };
 
   const handleApprovePayment = (txId: string) => {
@@ -689,7 +698,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (res.success) {
       setTransactions(getTransactions());
       setStudents(getStudents());
-      setApprovalNotification(`✅ Verified! Approved ${res.tx?.userName}'s transfer of ${res.tx?.currency}${res.tx?.amount}. One Semester Full Pass activated.`);
+      setApprovalNotification(`✅ Verified! Approved ${res.tx?.userName || 'student'}'s payment receipt (${res.tx?.currency || 'ETB '}${res.tx?.amount || 300}). One Semester Full Pass unlocked!`);
+      setTimeout(() => setApprovalNotification(null), 5000);
+    }
+  };
+
+  const handleApproveStudentDirectly = (studentId: string) => {
+    const res = approveStudentDirectly(studentId);
+    if (res.success) {
+      setTransactions(getTransactions());
+      setStudents(getStudents());
+      setApprovalNotification(`✅ Verified! Approved ${res.student?.name || 'student'}. One Semester Full Pass activated!`);
       setTimeout(() => setApprovalNotification(null), 5000);
     }
   };
@@ -2339,33 +2358,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         {/* Payment Screenshot Column */}
                         <td className="py-2.5 px-3">
                           {screenshotUrl ? (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2.5">
                               <div
                                 onClick={() => handleInspectStudentScreenshot(s)}
-                                className="w-9 h-9 rounded-lg overflow-hidden border border-amber-500/50 bg-slate-950 shrink-0 cursor-pointer group relative shadow-xs"
-                                title="Click to view screenshot"
+                                className="w-12 h-12 rounded-xl overflow-hidden border-2 border-amber-500/60 hover:border-amber-400 bg-slate-950 shrink-0 cursor-pointer group relative shadow-md transition-all"
+                                title="Click to inspect full screenshot"
                               >
                                 <img
                                   src={screenshotUrl}
-                                  alt="Receipt slip"
+                                  alt="Payment Slip"
                                   className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                                   referrerPolicy="no-referrer"
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                  <Eye className="w-3.5 h-3.5 text-white" />
+                                  <Eye className="w-4 h-4 text-white" />
                                 </div>
+                                <span className="absolute bottom-0 right-0 bg-black/80 text-[8px] font-bold text-amber-300 px-1 rounded-tl">
+                                  Zoom
+                                </span>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleInspectStudentScreenshot(s)}
-                                className="text-amber-300 hover:text-amber-200 font-bold text-[11px] flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 px-2 py-1 rounded-md border border-amber-500/30 transition-colors cursor-pointer"
-                              >
-                                <Eye className="w-3 h-3 text-amber-400" />
-                                <span>Inspect</span>
-                              </button>
+                              <div className="space-y-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleInspectStudentScreenshot(s)}
+                                  className="text-amber-300 hover:text-amber-200 font-bold text-[11px] flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 px-2.5 py-1 rounded-lg border border-amber-500/30 transition-colors cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3 text-amber-400" />
+                                  <span>Inspect Slip</span>
+                                </button>
+                                <span className="text-[10px] text-slate-400 block font-mono">
+                                  {s.subscription?.paymentMethod || studentTx?.paymentMethod || 'Slip attached'}
+                                </span>
+                              </div>
                             </div>
                           ) : (
-                            <span className="text-slate-500 text-[11px] italic">No slip attached</span>
+                            <span className="text-slate-500 text-[11px] italic">No slip uploaded yet</span>
                           )}
                         </td>
 
@@ -2379,35 +2406,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 : 'bg-slate-800 text-slate-400 border border-slate-700'
                             }`}
                           >
-                            {isSubscribed ? 'Active Pro' : isPending ? 'Pending Verification' : 'No Sub'}
+                            {isSubscribed ? 'Active Full Pass' : isPending ? 'Pending Verification' : 'Free Preview'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 text-slate-300 font-medium">{s.subscription?.planName || 'None'}</td>
+                        <td className="py-2.5 px-3 text-slate-300 font-medium">{s.subscription?.planName || 'One Semester Full Pass'}</td>
                         <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">{s.subscription?.expiresAt || 'N/A'}</td>
                         <td className="py-2.5 px-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {isPending && studentTx ? (
+                            {isPending || (!isSubscribed && screenshotUrl) ? (
                               <button
-                                onClick={() => handleApprovePayment(studentTx.id)}
-                                className="px-3 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-600/30 flex items-center gap-1 cursor-pointer"
-                                title="Verify screenshot and grant access"
+                                type="button"
+                                onClick={() => {
+                                  if (studentTx) {
+                                    handleApprovePayment(studentTx.id);
+                                  } else {
+                                    handleApproveStudentDirectly(s.id);
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                                title="Verify student screenshot and unlock full access"
                               >
                                 <Check className="w-3.5 h-3.5" />
-                                <span>Verify & Grant</span>
+                                <span>Verify & Unlock Full Access</span>
                               </button>
                             ) : null}
 
                             <button
+                              type="button"
                               onClick={() => handleToggleStudentAccess(s.id, s.subscription?.status || 'none')}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
                                 isSubscribed
-                                  ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'
+                                  ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30'
                                   : isPending
                                   ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                                  : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30'
                               }`}
                             >
-                              {isSubscribed ? 'Revoke Access' : isPending ? 'Manual Pass' : 'Grant Pro Pass'}
+                              {isSubscribed ? 'Revoke Access' : isPending ? 'Direct Pass' : 'Grant Pro Pass'}
                             </button>
                           </div>
                         </td>

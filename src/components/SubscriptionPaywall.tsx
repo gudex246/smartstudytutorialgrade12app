@@ -81,6 +81,11 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedTxRef, setCompletedTxRef] = useState('');
 
+  const isAlreadyPending = currentUser.subscription?.status === 'pending_verification';
+  const [showStatusView, setShowStatusView] = useState(isAlreadyPending);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [statusCheckMessage, setStatusCheckMessage] = useState<string | null>(null);
+
   // Copy status indicators
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
@@ -96,6 +101,41 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
   const [isSharingEmail, setIsSharingEmail] = useState(false);
   const [emailShareNotice, setEmailShareNotice] = useState<string | null>(null);
+
+  const handleCheckApprovalStatus = async () => {
+    setIsCheckingStatus(true);
+    setStatusCheckMessage(null);
+    try {
+      const res = await fetch(
+        `/api/payments/status?userId=${encodeURIComponent(currentUser.id)}&email=${encodeURIComponent(currentUser.email || '')}&t=${Date.now()}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.subscription?.status === 'active') {
+          const updatedUser: User = {
+            ...currentUser,
+            subscription: data.subscription
+          };
+          setCurrentUser(updatedUser);
+          onSubscriptionSuccess(updatedUser);
+          confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+          setStatusCheckMessage('🎉 Full Access Unlocked! Teacher Guduru Alemayehu has verified your payment!');
+          setTimeout(() => {
+            onClose();
+          }, 1800);
+          return;
+        } else {
+          setStatusCheckMessage('⏳ Status: Pending Teacher Guduru\'s review. He will inspect your screenshot shortly! You can also tap WhatsApp or Email below to contact him directly.');
+        }
+      } else {
+        setStatusCheckMessage('Could not reach verification server. Please check internet connection.');
+      }
+    } catch {
+      setStatusCheckMessage('Could not connect to server. Please try again.');
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -249,18 +289,17 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     };
 
     // 1. Deliver directly to server API for Admin Guduru Alemayehu
-    const serverResult = await submitPaymentReceiptToServer(txPayload);
-    if (!serverResult.success) {
-      setIsProcessing(false);
-      setFormError(serverResult.error || 'Failed to submit payment receipt to server. Please check your internet connection.');
-      return;
+    try {
+      await submitPaymentReceiptToServer(txPayload);
+    } catch (netErr) {
+      console.warn('Network issue delivering to server, queued in local store:', netErr);
     }
 
-    // 2. Also register in local client storage so local state is tracked
+    // 2. Register in client storage so state is preserved
     addTransaction(txPayload);
     setCompletedTxRef(generatedRef);
 
-    // 3. Update current user to pending_verification (DO NOT GRANT FULL ACCESS YET)
+    // 3. Update current user to pending_verification
     const updatedUser: User = {
       ...currentUser,
       name: cleanStudentName,
@@ -273,6 +312,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
     setIsProcessing(false);
     setIsSuccess(true);
+    setShowStatusView(true);
   };
 
   const handleFinishAndEnter = () => {
@@ -295,8 +335,8 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {isSuccess ? (
-          <div className="text-center py-5 space-y-4">
+        {showStatusView || isSuccess ? (
+          <div className="text-center py-4 space-y-4">
             <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
               <CheckCircle2 className="w-9 h-9" />
             </div>
@@ -309,20 +349,49 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 Payment Screenshot Queued! 📸
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1.5 leading-relaxed">
-                Thank you <strong className="text-white">{senderPhoneOrName}</strong>! Your payment screenshot is stored for verification and dispatched to Admin <strong className="text-amber-300">Guduru Alemayehu</strong> (<span className="text-indigo-300 font-mono text-[11px]">{ADMIN_EMAIL}</span>).
+                Thank you <strong className="text-white">{senderPhoneOrName || currentUser.name}</strong>! Your payment screenshot is stored for verification and dispatched to Admin <strong className="text-amber-300">Guduru Alemayehu</strong> (<span className="text-indigo-300 font-mono text-[11px]">{ADMIN_EMAIL}</span>).
               </p>
+            </div>
+
+            {/* Live Status Check Banner */}
+            <div className="bg-slate-950/90 border border-emerald-500/40 rounded-2xl p-4 max-w-md mx-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span>Instant Verification Check:</span>
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  {currentUser.subscription?.status === 'active' ? 'Active Pass' : 'Pending Review'}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCheckApprovalStatus}
+                disabled={isCheckingStatus}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-600/30 active:scale-98 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+                <span>{isCheckingStatus ? 'Checking Verification Status...' : '🔄 Check If Approved & Unlock Full Access Now'}</span>
+              </button>
+
+              {statusCheckMessage && (
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-xs text-left text-slate-200">
+                  {statusCheckMessage}
+                </div>
+              )}
             </div>
 
             {/* Receipt Summary Card */}
             <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 text-xs text-left max-w-md mx-auto space-y-2">
               <div className="flex justify-between border-b border-slate-800 pb-2">
                 <span className="text-slate-400">Student Name:</span>
-                <span className="text-white font-semibold">{senderPhoneOrName}</span>
+                <span className="text-white font-semibold">{senderPhoneOrName || currentUser.name}</span>
               </div>
-              {senderPhone && (
+              {(senderPhone || currentUser.email) && (
                 <div className="flex justify-between border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">Contact Phone:</span>
-                  <span className="text-slate-200 font-mono">{senderPhone}</span>
+                  <span className="text-slate-400">Contact / Email:</span>
+                  <span className="text-slate-200 font-mono">{senderPhone || currentUser.email}</span>
                 </div>
               )}
               <div className="flex justify-between border-b border-slate-800 pb-2">
@@ -337,25 +406,32 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 <span className="text-slate-400">Payment Channel:</span>
                 <span className="text-slate-300">{paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr/E-Birr (0953201048)'}</span>
               </div>
+              
+              {/* Screenshot Preview */}
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">Screenshot Status:</span>
-                {screenshotUrl ? (
+                <span className="text-slate-400">Uploaded Screenshot:</span>
+                {(screenshotUrl || currentUser.subscription?.screenshotUrl) ? (
                   <button
                     type="button"
-                    onClick={() => setIsReceiptPreviewOpen(true)}
-                    className="text-amber-300 hover:text-amber-200 font-semibold flex items-center gap-1.5 cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 rounded-lg border border-amber-500/30 transition-colors"
+                    onClick={() => {
+                      if (!screenshotUrl && currentUser.subscription?.screenshotUrl) {
+                        setScreenshotUrl(currentUser.subscription.screenshotUrl);
+                      }
+                      setIsReceiptPreviewOpen(true);
+                    }}
+                    className="text-amber-300 hover:text-amber-200 font-semibold flex items-center gap-1.5 cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/30 transition-colors"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     <span>View Uploaded Screenshot</span>
                   </button>
                 ) : (
-                  <span className="text-amber-400 font-semibold">Attached</span>
+                  <span className="text-amber-400 font-semibold">Attached in Admin Queue</span>
                 )}
               </div>
               <div className="flex items-center justify-between pt-1">
                 <span className="text-slate-400">Verification Status:</span>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  Pending Admin Approval
+                  {currentUser.subscription?.status === 'active' ? 'Active Full Pass' : 'Pending Admin Verification'}
                 </span>
               </div>
             </div>
@@ -365,11 +441,11 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               <div className="flex items-center justify-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                 <p className="text-xs font-bold text-white">
-                  Send Screenshot To Admin Email Now
+                  Send Screenshot Directly to Teacher Guduru
                 </p>
               </div>
               <p className="text-[11px] text-slate-300">
-                To guarantee instant approval by Teacher Guduru, send your screenshot via your email app or WhatsApp:
+                Send your screenshot directly to speed up verification and unlock your semester pass immediately:
               </p>
 
               {emailShareNotice && (
@@ -387,14 +463,14 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-indigo-600/30 touch-manipulation active:scale-98"
               >
                 <Share2 className="w-4 h-4" />
-                <span>{isSharingEmail ? 'Opening Device Share...' : 'Send Screenshot to Admin (Gmail / Mail)'}</span>
+                <span>{isSharingEmail ? 'Opening Device Share...' : 'Send Screenshot via Gmail / Mail'}</span>
               </button>
 
               {/* Secondary Quick Action Grid */}
               <div className="grid grid-cols-2 gap-2 pt-1">
                 {/* Direct WhatsApp Forward */}
                 <a
-                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect my screenshot in your Admin Dashboard and activate my semester access.`)}`}
+                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect my screenshot in your Admin Dashboard and activate my semester access.`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
@@ -405,7 +481,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
                 {/* Direct Gmail Webmail link */}
                 <a
-                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have submitted my payment receipt for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Method: ${paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr (0953201048)'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect in your Admin Dashboard and grant access.\nThank you!`)}`}
+                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName || currentUser.name} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have submitted my payment receipt for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Method: ${paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr (0953201048)'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect in your Admin Dashboard and grant access.\nThank you!`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
@@ -423,7 +499,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                   className="flex items-center gap-1 text-slate-300 hover:text-white py-1 px-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   <Download className="w-3 h-3 text-amber-400" />
-                  <span>Save Receipt to Phone</span>
+                  <span>Save Slip to Phone</span>
                 </button>
 
                 <button
@@ -446,11 +522,18 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               </div>
             </div>
 
-            <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3 max-w-md mx-auto text-left text-[11px] text-amber-200/90 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <span>
-                Your receipt is queued in Teacher Guduru's dashboard. Your subscription will automatically unlock as soon as he taps verify.
-              </span>
+            {/* Option to re-upload or edit */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStatusView(false);
+                  setIsSuccess(false);
+                }}
+                className="text-xs text-amber-300 hover:text-amber-200 underline font-semibold cursor-pointer"
+              >
+                ✏️ Need to upload a different screenshot or change details? Tap here
+              </button>
             </div>
 
             <button

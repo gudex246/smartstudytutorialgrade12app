@@ -343,11 +343,19 @@ export const QuestionsView: React.FC<QuestionsViewProps> = ({
             <button
               type="button"
               onClick={onOpenSubscriptionModal}
-              className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer hover:from-amber-400 hover:to-amber-500 transition-transform active:scale-95"
+              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer transition-all active:scale-95 inline-flex items-center gap-1.5"
             >
-              {user.subscription?.status === 'pending_verification'
-                ? 'View Receipt Status / Speed Up on WhatsApp'
-                : 'Unlock Full Access (300 ETB)'}
+              {user.subscription?.status === 'pending_verification' ? (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Check Verification Status / Unlock Access</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Unlock Full Access (300 ETB / Semester)</span>
+                </>
+              )}
             </button>
           </div>
         ) : (

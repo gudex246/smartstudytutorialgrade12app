@@ -72,6 +72,17 @@ function setStorage<T>(key: string, value: T): void {
           // ignore
         }
       }
+    } else if (key === KEYS.STUDENTS && Array.isArray(value)) {
+      try {
+        const lightweightStudents = (value as any[]).map((s, idx) =>
+          idx > 1 && s.subscription?.screenshotUrl && s.subscription.screenshotUrl.length > 500
+            ? { ...s, subscription: { ...s.subscription, screenshotUrl: '' } }
+            : s
+        );
+        window.localStorage.setItem(key, JSON.stringify(lightweightStudents));
+      } catch {
+        // ignore
+      }
     }
   }
 }
@@ -655,6 +666,89 @@ export function rejectStudentPayment(txId: string): { success: boolean; tx?: Pay
   }).catch((err) => console.warn('Could not sync rejection to server:', err));
 
   return { success: true, tx };
+}
+
+export function approveStudentDirectly(studentId: string): { success: boolean; student?: User } {
+  const students = getStudents();
+  const student = students.find((s) => s.id === studentId || s.email.toLowerCase() === studentId.toLowerCase());
+  if (!student) return { success: false };
+
+  const expireDate = new Date();
+  expireDate.setMonth(expireDate.getMonth() + 4);
+
+  const activeSub: User['subscription'] = {
+    status: 'active',
+    planId: student.subscription?.planId || 'plan-termly',
+    planName: student.subscription?.planName || 'One Semester Full Pass',
+    amountPaid: student.subscription?.amountPaid || 300,
+    paymentMethod: student.subscription?.paymentMethod || 'CBE / Telebirr',
+    transactionId: student.subscription?.transactionId || ('REF-' + Date.now()),
+    screenshotUrl: student.subscription?.screenshotUrl || '',
+    screenshotName: student.subscription?.screenshotName || 'Payment_Receipt.jpg',
+    activatedAt: new Date().toISOString().split('T')[0],
+    expiresAt: expireDate.toISOString().split('T')[0]
+  };
+
+  updateStudentSubscription(student.id, activeSub);
+
+  // Mark matching transactions as completed
+  const txs = getTransactions();
+  let txUpdated = false;
+  const updatedTxs = txs.map((t) => {
+    if (
+      (t.userEmail && student.email && t.userEmail.toLowerCase() === student.email.toLowerCase()) ||
+      (t.userId && t.userId === student.id) ||
+      (student.subscription?.transactionId && t.referenceNo === student.subscription.transactionId)
+    ) {
+      txUpdated = true;
+      return { ...t, status: 'completed' as const };
+    }
+    return t;
+  });
+  if (txUpdated) {
+    saveTransactions(updatedTxs);
+  }
+
+  // Update current user if matches
+  const current = getCurrentUser();
+  if (current && (current.id === student.id || current.email.toLowerCase() === student.email.toLowerCase())) {
+    setCurrentUser({
+      ...current,
+      subscription: activeSub
+    });
+  }
+
+  // Sync to server API
+  fetch('/api/payments/approve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId: student.id })
+  }).catch((err) => console.warn('Could not sync student approval to server:', err));
+
+  return { success: true, student: { ...student, subscription: activeSub } };
+}
+
+export function rejectStudentDirectly(studentId: string): { success: boolean } {
+  const rejectedSub: User['subscription'] = {
+    status: 'none'
+  };
+  updateStudentSubscription(studentId, rejectedSub);
+
+  const current = getCurrentUser();
+  if (current && (current.id === studentId || current.email.toLowerCase() === studentId.toLowerCase())) {
+    setCurrentUser({
+      ...current,
+      subscription: rejectedSub
+    });
+  }
+
+  fetch('/api/payments/reject', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId })
+  }).catch((err) => console.warn('Could not sync student rejection to server:', err));
+
+  return { success: true };
 }
 
 // Students
