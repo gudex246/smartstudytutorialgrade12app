@@ -88,6 +88,8 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
   // Copy status indicators
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
+  const [isSharingEmail, setIsSharingEmail] = useState(false);
+  const [emailShareNotice, setEmailShareNotice] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -98,9 +100,6 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   if (appliedPromo && appliedPromo.isActive) {
     finalPrice = Math.max(0, Math.round(finalPrice * (1 - appliedPromo.discountPercentage / 100)));
   }
-
-  const [isSharingEmail, setIsSharingEmail] = useState(false);
-  const [emailShareNotice, setEmailShareNotice] = useState<string | null>(null);
 
   const handleCheckApprovalStatus = async () => {
     setIsCheckingStatus(true);

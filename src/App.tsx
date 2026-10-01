@@ -342,16 +342,19 @@ export default function App() {
       />
 
       {/* Subscription Fee Paywall Modal */}
-      <SubscriptionPaywall
-        isOpen={isSubscriptionModalOpen}
-        onClose={() => setIsSubscriptionModalOpen(false)}
-        currentUser={activeUser}
-        onSubscriptionSuccess={handleSubscriptionSuccess}
-        onFreePreviewContinue={() => {
-          setIsSubscriptionModalOpen(false);
-          setActiveTab('questions');
-        }}
-      />
+      {isSubscriptionModalOpen && (
+        <SubscriptionPaywall
+          key={`sub-modal-${activeUser.id}`}
+          isOpen={isSubscriptionModalOpen}
+          onClose={() => setIsSubscriptionModalOpen(false)}
+          currentUser={activeUser}
+          onSubscriptionSuccess={handleSubscriptionSuccess}
+          onFreePreviewContinue={() => {
+            setIsSubscriptionModalOpen(false);
+            setActiveTab('questions');
+          }}
+        />
+      )}
 
       {/* Install PWA & Questions FAQ Modal */}
       <InstallAppModal
