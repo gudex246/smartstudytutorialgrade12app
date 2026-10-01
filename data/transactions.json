@@ -1,5 +1,37 @@
 [
   {
+    "id": "tx-1790843424546-nsguw",
+    "userId": "student-1790843424547",
+    "userEmail": "abel.bekele@student.smartstudy.edu",
+    "userName": "Abel Bekele",
+    "planId": "plan-termly",
+    "planName": "One Semester Full Pass",
+    "amount": 300,
+    "currency": "ETB ",
+    "paymentMethod": "CBE Bank (1000521750255)",
+    "status": "completed",
+    "referenceNo": "TX-301982",
+    "screenshotUrl": "/api/uploads/receipt_1790843424546_kfioq.png",
+    "screenshotName": "Abel_CBE_Receipt.png",
+    "createdAt": "2026-10-01"
+  },
+  {
+    "id": "tx-1790843010355-vi4bt",
+    "userId": "student-1790843010355",
+    "userEmail": "studenttest1@gmail.com",
+    "userName": "Student Test 1",
+    "planId": "plan-termly",
+    "planName": "One Semester Full Pass",
+    "amount": 300,
+    "currency": "ETB ",
+    "paymentMethod": "CBE",
+    "status": "pending",
+    "referenceNo": "TX-369647",
+    "screenshotUrl": "/api/uploads/receipt_1790843424543_1ivvl.png",
+    "screenshotName": "test.png",
+    "createdAt": "2026-10-01"
+  },
+  {
     "id": "tx-1790318774468-7w76o",
     "userId": "test-1",
     "userEmail": "teststudent@gmail.com",
@@ -59,7 +91,7 @@
     "paymentMethod": "Telebirr",
     "status": "pending",
     "referenceNo": "TX-200512",
-    "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==",
+    "screenshotUrl": "/api/uploads/receipt_1790843424545_i39x3.png",
     "screenshotName": "Payment_Receipt.jpg",
     "createdAt": "2026-09-27"
   },

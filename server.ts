@@ -15,6 +15,18 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Uploaded receipt images directory
+const DATA_DIR = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'data');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+} catch (e) {
+  // ignore
+}
+app.use('/api/uploads', express.static(UPLOADS_DIR));
+
 // Initialize Gemini Client
 const getGenAI = () => {
   return new GoogleGenAI({
@@ -445,7 +457,6 @@ interface ServerStudent {
   createdAt?: string;
 }
 
-const DATA_DIR = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const STUDENTS_FILE = path.join(DATA_DIR, 'students.json');
 
@@ -457,8 +468,54 @@ function ensureDataDir() {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
   } catch (e) {
     // ignore
+  }
+}
+
+// Convert base64 dataUrls to permanent image files served at /api/uploads/...
+function saveScreenshotFile(dataUrl: string, prefix = 'receipt'): string {
+  if (!dataUrl || typeof dataUrl !== 'string') return '';
+  // If already a hosted URL, preserve it
+  if (!dataUrl.startsWith('data:')) {
+    return dataUrl;
+  }
+  try {
+    ensureDataDir();
+    // 1. Base64 encoded image
+    const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+    if (matches && matches.length === 3) {
+      let ext = matches[1].toLowerCase();
+      if (ext === 'jpeg') ext = 'jpg';
+      if (ext.includes('svg')) ext = 'svg';
+      if (ext.includes('png')) ext = 'png';
+      if (ext.includes('webp')) ext = 'webp';
+
+      const filename = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+      const filePath = path.join(UPLOADS_DIR, filename);
+      const buffer = Buffer.from(matches[2], 'base64');
+      fs.writeFileSync(filePath, buffer);
+      console.log(`[STORAGE] Saved receipt screenshot to disk: /api/uploads/${filename} (${buffer.length} bytes)`);
+      return `/api/uploads/${filename}`;
+    }
+
+    // 2. SVG XML dataUrl
+    const svgMatch = dataUrl.match(/^data:image\/svg\+xml(?:;utf8)?,(.*)$/);
+    if (svgMatch) {
+      const filename = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.svg`;
+      const filePath = path.join(UPLOADS_DIR, filename);
+      fs.writeFileSync(filePath, decodeURIComponent(svgMatch[1]), 'utf8');
+      console.log(`[STORAGE] Saved SVG receipt screenshot to disk: /api/uploads/${filename}`);
+      return `/api/uploads/${filename}`;
+    }
+
+    return dataUrl;
+  } catch (err) {
+    console.warn('Could not save screenshot to file, retaining dataUrl:', err);
+    return dataUrl;
   }
 }
 
@@ -470,7 +527,12 @@ function loadServerTransactions(): ServerTransaction[] {
       const data = fs.readFileSync(TX_FILE, 'utf8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        txs = parsed;
+        txs = parsed.map((t) => {
+          if (t.screenshotUrl && t.screenshotUrl.startsWith('data:')) {
+            return { ...t, screenshotUrl: saveScreenshotFile(t.screenshotUrl, 'receipt') };
+          }
+          return t;
+        });
       }
     }
   } catch (e) {
@@ -483,12 +545,21 @@ function loadServerTransactions(): ServerTransaction[] {
     let hasNewFromStudents = false;
     for (const s of students) {
       if (s.subscription && (s.subscription.screenshotUrl || s.subscription.transactionId)) {
+        const studentScreenshot = s.subscription.screenshotUrl && s.subscription.screenshotUrl.startsWith('data:')
+          ? saveScreenshotFile(s.subscription.screenshotUrl, 'receipt')
+          : (s.subscription.screenshotUrl || '');
+
+        if (studentScreenshot !== s.subscription.screenshotUrl) {
+          s.subscription.screenshotUrl = studentScreenshot;
+        }
+
         const matchingTx = txs.find(
           (t) =>
             t.id === s.subscription?.transactionId ||
             (t.referenceNo && t.referenceNo === s.subscription?.transactionId) ||
             (t.userEmail && s.email && t.userEmail.toLowerCase() === s.email.toLowerCase()) ||
-            (t.userId && t.userId === s.id)
+            (t.userId && t.userId === s.id) ||
+            (t.userName && s.name && t.userName.toLowerCase().includes(s.name.toLowerCase()))
         );
         if (!matchingTx) {
           txs.push({
@@ -503,19 +574,20 @@ function loadServerTransactions(): ServerTransaction[] {
             paymentMethod: s.subscription.paymentMethod || 'CBE / Telebirr',
             status: s.subscription.status === 'active' ? 'completed' : 'pending',
             referenceNo: s.subscription.transactionId || ('REF-' + s.id),
-            screenshotUrl: s.subscription.screenshotUrl || '',
+            screenshotUrl: studentScreenshot,
             screenshotName: s.subscription.screenshotName || 'Payment_Receipt.jpg',
             createdAt: s.subscription.activatedAt || s.createdAt || new Date().toISOString().split('T')[0]
           });
           hasNewFromStudents = true;
-        } else if (!matchingTx.screenshotUrl && s.subscription.screenshotUrl) {
-          matchingTx.screenshotUrl = s.subscription.screenshotUrl;
+        } else if (!matchingTx.screenshotUrl && studentScreenshot) {
+          matchingTx.screenshotUrl = studentScreenshot;
           hasNewFromStudents = true;
         }
       }
     }
     if (hasNewFromStudents) {
       saveServerTransactions(txs);
+      saveServerStudents(students);
     }
   } catch (err) {
     console.warn('Could not cross-sync students with transactions:', err);
@@ -772,6 +844,9 @@ app.post('/api/payments/submit', (req, res) => {
     const expireDate = new Date();
     expireDate.setMonth(expireDate.getMonth() + 4);
 
+    // Save uploaded screenshot as a static image file on disk
+    const hostedScreenshotUrl = saveScreenshotFile(screenshotUrl || '', 'receipt');
+
     // Subscription status is strictly PENDING until Admin Guduru Alemayehu verifies the screenshot
     const pendingSub = {
       status: 'pending_verification' as const,
@@ -780,15 +855,36 @@ app.post('/api/payments/submit', (req, res) => {
       amountPaid: Number(amount) || 300,
       paymentMethod: paymentMethod || 'CBE Bank Transfer (1000521750255)',
       transactionId: txReference,
-      screenshotUrl: screenshotUrl || '',
+      screenshotUrl: hostedScreenshotUrl,
       screenshotName: screenshotName || 'Payment_Receipt.jpg',
       activatedAt: new Date().toISOString().split('T')[0],
       expiresAt: expireDate.toISOString().split('T')[0]
     };
 
+    // Smart student matching across id, email, name, and phone numbers
+    const cleanLowerEmail = cleanEmail.toLowerCase();
+    const cleanLowerName = resolvedName.toLowerCase();
+    const rawContactDigits = (userName || '').replace(/[^0-9]/g, '') || (userEmail || '').replace(/[^0-9]/g, '');
+
+    const sIdx = students.findIndex((s) => {
+      if (s.id && (s.id === userId)) return true;
+      if (s.email && s.email.toLowerCase() === cleanLowerEmail) return true;
+      if (s.name && cleanLowerName) {
+        const sNameLower = s.name.toLowerCase();
+        if (sNameLower === cleanLowerName || cleanLowerName.includes(sNameLower) || sNameLower.includes(cleanLowerName)) return true;
+      }
+      if (rawContactDigits.length >= 8) {
+        const sDigits = ((s.email || '') + (s.name || '')).replace(/[^0-9]/g, '');
+        if (sDigits && (sDigits.includes(rawContactDigits) || rawContactDigits.includes(sDigits))) return true;
+      }
+      return false;
+    });
+
+    const targetUserId = sIdx >= 0 ? students[sIdx].id : (userId || 'student-' + Date.now());
+
     const newTx: ServerTransaction = {
       id: txId,
-      userId: userId || 'student-' + Date.now(),
+      userId: targetUserId,
       userEmail: cleanEmail,
       userName: resolvedName,
       planId: pendingSub.planId,
@@ -798,7 +894,7 @@ app.post('/api/payments/submit', (req, res) => {
       paymentMethod: pendingSub.paymentMethod,
       status: 'pending', // PENDING: Requires Admin Guduru Alemayehu verification
       referenceNo: txReference,
-      screenshotUrl: screenshotUrl || '',
+      screenshotUrl: hostedScreenshotUrl,
       screenshotName: screenshotName || 'Payment_Receipt.jpg',
       createdAt: createdAt || new Date().toISOString().split('T')[0]
     };
@@ -815,16 +911,16 @@ app.post('/api/payments/submit', (req, res) => {
     saveServerTransactions(txs);
 
     // Update student subscription status to PENDING_VERIFICATION (not active yet)
-    const sIdx = students.findIndex((s) => s.email.toLowerCase() === cleanEmail || s.id === newTx.userId);
     if (sIdx >= 0) {
       students[sIdx] = {
         ...students[sIdx],
-        name: resolvedName,
+        name: students[sIdx].name || resolvedName,
+        email: students[sIdx].email && !students[sIdx].email.includes('student.sample') ? students[sIdx].email : cleanEmail,
         subscription: pendingSub
       };
     } else {
       students.unshift({
-        id: newTx.userId,
+        id: targetUserId,
         email: cleanEmail,
         name: resolvedName,
         role: 'student',
@@ -834,7 +930,7 @@ app.post('/api/payments/submit', (req, res) => {
     }
     saveServerStudents(students);
 
-    console.log(`[PAYMENT SCREENSHOT DELIVERED TO ADMIN] Student ${resolvedName} (${cleanEmail}) submitted ${newTx.currency}${newTx.amount}. Receipt stored for Admin Guduru Alemayehu verification.`);
+    console.log(`[PAYMENT SCREENSHOT DELIVERED TO ADMIN] Student ${resolvedName} (${cleanEmail}) submitted ${newTx.currency}${newTx.amount}. Screenshot stored at ${hostedScreenshotUrl} for Admin Guduru Alemayehu verification.`);
 
     // Dispatch automated email notification directly to Admin Guduru Alemayehu (gudurualemayehu29@gmail.com)
     sendPaymentReceiptEmailToAdmin(newTx)

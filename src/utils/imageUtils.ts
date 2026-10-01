@@ -55,9 +55,9 @@ export function downloadDataUrl(dataUrl: string, fileName = 'Payment_Receipt.jpg
 
 export async function processPaymentScreenshot(
   file: File,
-  maxWidth = 1000,
-  maxHeight = 1000,
-  quality = 0.75
+  maxWidth = 850,
+  maxHeight = 850,
+  quality = 0.68
 ): Promise<ProcessedImage> {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -96,11 +96,11 @@ export async function processPaymentScreenshot(
         try {
           let { width, height } = img;
 
-          // Scale down if larger than max dimensions to save memory & storage on mobile
+          // Scale down if larger than max dimensions to ensure quick upload & clear receipt rendering
           if (width > maxWidth || height > maxHeight) {
             const ratio = Math.min(maxWidth / width, maxHeight / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
+            width = Math.max(1, Math.round(width * ratio));
+            height = Math.max(1, Math.round(height * ratio));
           }
 
           const canvas = document.createElement('canvas');
@@ -117,19 +117,28 @@ export async function processPaymentScreenshot(
             return;
           }
 
+          // Fill white background in case of transparent PNG
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+
           // Render image onto canvas
           ctx.drawImage(img, 0, 0, width, height);
 
           // Export compressed JPEG
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          let compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          let stringLength = compressedDataUrl.length - 'data:image/jpeg;base64,'.length;
+          let compressedBytes = Math.round((stringLength * 3) / 4);
 
-          // Estimate compressed size
-          const stringLength = compressedDataUrl.length - 'data:image/jpeg;base64,'.length;
-          const compressedBytes = Math.round((stringLength * 3) / 4);
+          // If still over 150KB, compress slightly more to guarantee fast transmission
+          if (compressedBytes > 150 * 1024) {
+            compressedDataUrl = canvas.toDataURL('image/jpeg', 0.52);
+            stringLength = compressedDataUrl.length - 'data:image/jpeg;base64,'.length;
+            compressedBytes = Math.round((stringLength * 3) / 4);
+          }
 
           resolve({
             dataUrl: compressedDataUrl,
-            fileName: file.name || 'Payment_Receipt.jpg',
+            fileName: (file.name || 'Payment_Receipt.jpg').replace(/\.[^/.]+$/, '') + '.jpg',
             fileSizeFormatted: formatFileSize(compressedBytes)
           });
         } catch {

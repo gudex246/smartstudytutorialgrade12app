@@ -288,14 +288,25 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     };
 
     // 1. Deliver directly to server API for Admin Guduru Alemayehu
+    let deliveredTx: any = txPayload;
+    let deliveredSub = pendingSub;
     try {
-      await submitPaymentReceiptToServer(txPayload);
+      const serverResult = await submitPaymentReceiptToServer(txPayload);
+      if (serverResult.success && serverResult.transaction) {
+        deliveredTx = serverResult.transaction;
+        if (serverResult.transaction.screenshotUrl) {
+          deliveredSub = {
+            ...pendingSub,
+            screenshotUrl: serverResult.transaction.screenshotUrl
+          };
+        }
+      }
     } catch (netErr) {
       console.warn('Network issue delivering to server, queued in local store:', netErr);
     }
 
     // 2. Register in client storage so state is preserved
-    addTransaction(txPayload);
+    addTransaction(deliveredTx);
     setCompletedTxRef(generatedRef);
 
     // 3. Update current user to pending_verification
@@ -303,11 +314,11 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
       ...currentUser,
       name: cleanStudentName,
       email: cleanStudentEmail,
-      subscription: pendingSub
+      subscription: deliveredSub
     };
 
     setCurrentUser(updatedUser);
-    updateStudentSubscription(currentUser.id, pendingSub);
+    updateStudentSubscription(currentUser.id, deliveredSub);
 
     setIsProcessing(false);
     setIsSuccess(true);

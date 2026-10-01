@@ -57,25 +57,19 @@ function setStorage<T>(key: string, value: T): void {
     console.warn(`Storage quota exceeded or restricted for ${key}:`, e);
     if (key === KEYS.TRANSACTIONS && Array.isArray(value)) {
       try {
-        const lightweight = (value as any[]).map((item, idx) =>
-          idx > 0 && item.screenshotUrl && item.screenshotUrl.length > 500
+        const lightweight = (value as any[]).map((item) =>
+          item.screenshotUrl && item.screenshotUrl.startsWith('data:') && item.screenshotUrl.length > 30000
             ? { ...item, screenshotUrl: '' }
             : item
         );
         window.localStorage.setItem(key, JSON.stringify(lightweight));
-      } catch (inner) {
-        console.warn('Could not save lightweight transactions:', inner);
-        try {
-          const minimal = (value as any[]).map((item) => ({ ...item, screenshotUrl: '' }));
-          window.localStorage.setItem(key, JSON.stringify(minimal));
-        } catch {
-          // ignore
-        }
+      } catch {
+        // ignore
       }
     } else if (key === KEYS.STUDENTS && Array.isArray(value)) {
       try {
-        const lightweightStudents = (value as any[]).map((s, idx) =>
-          idx > 1 && s.subscription?.screenshotUrl && s.subscription.screenshotUrl.length > 500
+        const lightweightStudents = (value as any[]).map((s) =>
+          s.subscription?.screenshotUrl && s.subscription.screenshotUrl.startsWith('data:') && s.subscription.screenshotUrl.length > 30000
             ? { ...s, subscription: { ...s.subscription, screenshotUrl: '' } }
             : s
         );
@@ -449,38 +443,70 @@ export function addPromoCode(code: PromoCode): PromoCode[] {
   return codes;
 }
 
+// In-memory cache for transactions and students to prevent loss from localStorage limits
+let inMemoryTransactions: PaymentTransaction[] | null = null;
+let inMemoryStudents: User[] | null = null;
+
 // Transactions
 export function getTransactions(): PaymentTransaction[] {
-  return getStorage<PaymentTransaction[]>(KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
+  if (inMemoryTransactions && inMemoryTransactions.length > 0) {
+    return inMemoryTransactions;
+  }
+  const loaded = getStorage<PaymentTransaction[]>(KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
+  inMemoryTransactions = loaded;
+  return inMemoryTransactions;
 }
 
 export function saveTransactions(txs: PaymentTransaction[]): void {
+  inMemoryTransactions = txs;
   setStorage(KEYS.TRANSACTIONS, txs);
 }
 
 export async function submitPaymentReceiptToServer(
   tx: PaymentTransaction
 ): Promise<{ success: boolean; transaction?: PaymentTransaction; error?: string }> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
-    const res = await fetch('/api/payments/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(tx),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      return { success: false, error: errData.error || `Server returned error (${res.status})` };
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const res = await fetch('/api/payments/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tx),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        if (attempt === 2) {
+          return { success: false, error: errData.error || `Server returned error (${res.status})` };
+        }
+        await new Promise((r) => setTimeout(r, 800));
+        continue;
+      }
+      const data = await res.json();
+      const confirmedTx = data.transaction || tx;
+      // Immediately reflect confirmed transaction into in-memory store
+      const currentList = getTransactions();
+      const idx = currentList.findIndex(
+        (t) => t.id === confirmedTx.id || (t.referenceNo && t.referenceNo === confirmedTx.referenceNo)
+      );
+      if (idx >= 0) {
+        currentList[idx] = { ...currentList[idx], ...confirmedTx };
+      } else {
+        currentList.unshift(confirmedTx);
+      }
+      saveTransactions(currentList);
+      return { success: true, transaction: confirmedTx };
+    } catch (err: any) {
+      if (attempt === 2) {
+        console.error('Failed to submit receipt to server after 2 attempts:', err);
+        return { success: false, error: err?.message || 'Network connection failed' };
+      }
+      await new Promise((r) => setTimeout(r, 800));
     }
-    const data = await res.json();
-    return { success: true, transaction: data.transaction || tx };
-  } catch (err: any) {
-    console.error('Failed to submit receipt to server:', err);
-    return { success: false, error: err?.message || 'Network connection failed' };
   }
+  return { success: false, error: 'Network connection failed' };
 }
 
 export function addTransaction(
@@ -509,7 +535,15 @@ export function addTransaction(
 
   // Transmit to server API so Admin Guduru Alemayehu receives it on any device live
   submitPaymentReceiptToServer(newTx).then((res) => {
-    if (res.success) {
+    if (res.success && res.transaction) {
+      const currentList = getTransactions();
+      const idx = currentList.findIndex(
+        (t) => t.id === newTx.id || (t.referenceNo && t.referenceNo === newTx.referenceNo)
+      );
+      if (idx >= 0) {
+        currentList[idx] = { ...currentList[idx], ...res.transaction };
+        saveTransactions(currentList);
+      }
       console.log('Payment receipt successfully transmitted to Teacher Guduru Alemayehu Admin queue');
     }
   });
@@ -570,11 +604,16 @@ export async function syncServerTransactions(): Promise<{ transactions: PaymentT
       if (data.students && Array.isArray(data.students)) {
         const localStudents = getStudents();
         const sMap = new Map<string, User>();
-        localStudents.forEach((s) => sMap.set(s.email.toLowerCase(), s));
+        localStudents.forEach((s) => {
+          const key = (s.email || s.id || '').toLowerCase();
+          if (key) sMap.set(key, s);
+        });
         data.students.forEach((s: any) => {
-          const key = s.email.toLowerCase();
-          const existing = sMap.get(key);
-          sMap.set(key, { ...existing, ...s });
+          const key = (s.email || s.id || '').toLowerCase();
+          if (key) {
+            const existing = sMap.get(key);
+            sMap.set(key, { ...existing, ...s });
+          }
         });
         const mergedStudents = Array.from(sMap.values());
         saveStudents(mergedStudents);
@@ -753,6 +792,9 @@ export function rejectStudentDirectly(studentId: string): { success: boolean } {
 
 // Students
 export function getStudents(): User[] {
+  if (inMemoryStudents && inMemoryStudents.length > 0) {
+    return inMemoryStudents;
+  }
   const defaultStudents: User[] = [
     INITIAL_STUDENT_USER,
     {
@@ -784,10 +826,13 @@ export function getStudents(): User[] {
       createdAt: '2026-08-14'
     }
   ];
-  return getStorage<User[]>(KEYS.STUDENTS, defaultStudents);
+  const loaded = getStorage<User[]>(KEYS.STUDENTS, defaultStudents);
+  inMemoryStudents = loaded;
+  return inMemoryStudents;
 }
 
 export function saveStudents(students: User[]): void {
+  inMemoryStudents = students;
   setStorage(KEYS.STUDENTS, students);
 }
 

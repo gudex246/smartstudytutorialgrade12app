@@ -170,10 +170,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const findStudentTransaction = (s: User): PaymentTransaction | undefined => {
+    const sEmail = (s.email || '').toLowerCase().trim();
+    const sName = (s.name || '').toLowerCase().trim();
+    const sPhoneDigits = ((s.email || '') + (s.name || '')).replace(/[^0-9]/g, '');
+
+    return transactions.find((t) => {
+      if (t.userId && s.id && t.userId === s.id) return true;
+      const tEmail = (t.userEmail || '').toLowerCase().trim();
+      if (tEmail && sEmail && tEmail === sEmail) return true;
+      if (s.subscription?.transactionId && (t.referenceNo === s.subscription.transactionId || t.id === s.subscription.transactionId)) return true;
+      const tName = (t.userName || '').toLowerCase().trim();
+      if (sName && tName && (sName === tName || sName.includes(tName) || tName.includes(sName))) return true;
+      if (sPhoneDigits && sPhoneDigits.length >= 8) {
+        const tDigits = ((t.userEmail || '') + (t.userName || '')).replace(/[^0-9]/g, '');
+        if (tDigits && (tDigits.includes(sPhoneDigits) || sPhoneDigits.includes(tDigits))) return true;
+      }
+      return false;
+    });
+  };
+
   const handleInspectStudentScreenshot = (s: User) => {
-    const match = transactions.find(
-      (t) => (t.userEmail && s.email && t.userEmail.toLowerCase() === s.email.toLowerCase()) || (t.userId && t.userId === s.id)
-    );
+    const match = findStudentTransaction(s);
     if (match && match.screenshotUrl) {
       setInspectingTx(match);
       return;
@@ -2336,12 +2354,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {students.map((s) => {
-                    const isSubscribed = s.subscription?.status === 'active';
-                    const isPending = s.subscription?.status === 'pending_verification';
-                    const studentTx = transactions.find(
-                      (t) => (t.userEmail && s.email && t.userEmail.toLowerCase() === s.email.toLowerCase()) || (t.userId && t.userId === s.id)
-                    );
+                    const studentTx = findStudentTransaction(s);
                     const screenshotUrl = s.subscription?.screenshotUrl || studentTx?.screenshotUrl;
+                    const isSubscribed = s.subscription?.status === 'active' || (studentTx && studentTx.status === 'completed');
+                    const isPending = s.subscription?.status === 'pending_verification' || (studentTx && studentTx.status === 'pending');
 
                     return (
                       <tr key={s.id} className="hover:bg-slate-800/40 transition-colors">
