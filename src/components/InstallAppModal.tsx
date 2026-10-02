@@ -17,7 +17,8 @@ import {
   Copy,
   Check,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle
 } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -44,6 +45,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
   const [detectedPlatform, setDetectedPlatform] = useState<'android' | 'ios' | 'desktop'>('android');
   const [isStandalone, setIsStandalone] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
 
   useEffect(() => {
     // Detect environment safely
@@ -58,6 +60,9 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
 
     try {
       const ua = (typeof window !== 'undefined' ? window.navigator.userAgent : '').toLowerCase();
+      const inApp = /telegram|fban|fbav|instagram|whatsapp|tiktok|micromessenger|snapchat/.test(ua);
+      setIsInAppBrowser(inApp);
+
       if (/iphone|ipad|ipod/.test(ua)) {
         setDetectedPlatform('ios');
         setDeviceTab('ios');
@@ -77,11 +82,14 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
   if (!isOpen) return null;
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
+    // Check both passed deferredPrompt and global window.__pwaInstallPrompt
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? (window as any).__pwaInstallPrompt : null);
+
+    if (promptEvent && typeof promptEvent.prompt === 'function') {
       setInstalling(true);
       try {
-        await deferredPrompt.prompt();
-        const choice = await deferredPrompt.userChoice;
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
         if (choice.outcome === 'accepted') {
           onInstallSuccess();
           onClose();
@@ -92,7 +100,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
         setInstalling(false);
       }
     } else {
-      // If browser does not support programmatic prompt (like iOS Safari or Firefox), guide the user
+      // If browser does not support programmatic prompt (like iOS Safari or Firefox or in-app webview), guide the user
       if (detectedPlatform === 'ios') {
         setDeviceTab('ios');
       } else if (detectedPlatform === 'desktop') {
@@ -201,6 +209,19 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* In-App Browser (Telegram, WhatsApp, etc.) Guidance Banner */}
+        {isInAppBrowser && (
+          <div className="p-3.5 bg-amber-500/20 border-b border-amber-500/40 text-amber-200 text-xs flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-white text-xs sm:text-sm">Opened from Telegram, WhatsApp, or Social App?</p>
+              <p className="text-[11px] text-amber-200/90 mt-1 leading-relaxed">
+                App installation cannot run inside in-app webviews. Tap the <strong>three dots (⋮)</strong> or <strong>Share (⎋)</strong> at the top right of this screen, select <strong className="text-white underline">"Open in Chrome"</strong> (on Android) or <strong className="text-white underline">"Open in Safari"</strong> (on iPhone), then tap <strong>"Install App"</strong> to install on your mobile device!
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Benefits Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 bg-slate-950/50 border-b border-slate-800 text-xs">

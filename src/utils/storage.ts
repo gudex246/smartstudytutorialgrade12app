@@ -126,6 +126,13 @@ export function authenticateUser(email: string, password?: string, name?: string
   const isAdmin = cleanEmail === ADMIN_EMAIL.toLowerCase();
 
   if (isAdmin) {
+    // Admin MUST provide the correct administrator password!
+    const cleanPass = (password || '').trim();
+    const validPasswords = ['admin123', 'guduru2025', 'guduru123'];
+    if (!validPasswords.includes(cleanPass)) {
+      throw new Error('Incorrect Administrator password. Only Teacher Guduru Alemayehu can sign in as Course Admin.');
+    }
+
     const adminUser: User = {
       ...INITIAL_ADMIN_USER,
       email: ADMIN_EMAIL,

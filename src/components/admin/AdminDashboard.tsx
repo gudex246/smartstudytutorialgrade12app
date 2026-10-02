@@ -76,6 +76,7 @@ import {
   rejectStudentDirectly,
   syncServerTransactions
 } from '../../utils/storage';
+import { subscribeToPaymentStream } from '../../utils/paymentSync';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -86,7 +87,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentUser,
   onPreviewAsStudent
 }) => {
-  const isSuperAdmin = currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const isSuperAdmin =
+    currentUser.role === 'admin' ||
+    (Boolean(currentUser.email) && currentUser.email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim());
 
   const [adminTab, setAdminTab] = useState<'overview' | 'receipts' | 'questions' | 'videos' | 'notes' | 'subscriptions'>('overview');
   const [receiptFilter, setReceiptFilter] = useState<'all' | 'screenshots' | 'cbe' | 'telebirr'>('all');
@@ -224,23 +227,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     handleSyncWithServer();
-    let prevTxCount = transactions.length;
 
+    // 1. Instant Real-Time SSE subscription from server for live receipt arrival
+    const unsubscribe = subscribeToPaymentStream((type, payload) => {
+      if (type === 'new_payment' && payload.transaction) {
+        setTransactions((prev) => {
+          const exists = prev.some((t) => t.id === payload.transaction?.id);
+          if (exists) return prev;
+          return [payload.transaction!, ...prev];
+        });
+        if (payload.student) {
+          setStudents((prev) => {
+            const exists = prev.some((s) => s.id === payload.student?.id);
+            if (exists) {
+              return prev.map((s) => (s.id === payload.student?.id ? payload.student! : s));
+            }
+            return [payload.student!, ...prev];
+          });
+        }
+        setApprovalNotification(
+          `🔔 New payment screenshot received from ${payload.transaction.userName || 'student'} (${payload.transaction.currency || 'ETB '}${payload.transaction.amount})! Click to inspect.`
+        );
+        setLastSyncTime(new Date().toLocaleTimeString());
+      } else if (type === 'payment_approved' || type === 'payment_rejected') {
+        handleSyncWithServer();
+      }
+    });
+
+    // 2. High-frequency 2.5-second polling fallback to guarantee synchronization
     const interval = setInterval(() => {
       syncServerTransactions().then((res) => {
         if (res) {
-          if (res.transactions.length > prevTxCount) {
-            const newest = res.transactions[0];
-            setApprovalNotification(`🔔 New payment receipt received from ${newest.userName || 'student'} (${newest.currency || 'ETB '}${newest.amount})!`);
-            prevTxCount = res.transactions.length;
-          }
           setTransactions(res.transactions);
           setStudents(res.students);
           setLastSyncTime(new Date().toLocaleTimeString());
         }
       });
-    }, 4000);
-    return () => clearInterval(interval);
+    }, 2500);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   // Question form state
@@ -834,14 +862,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       
       {/* Toast Notification */}
       {approvalNotification && (
-        <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-sm font-semibold flex items-center justify-between shadow-lg animate-fade-in">
-          <span>{approvalNotification}</span>
-          <button
-            onClick={() => setApprovalNotification(null)}
-            className="text-emerald-400 hover:text-white ml-3"
-          >
-            ✕
-          </button>
+        <div className="p-4 rounded-2xl bg-amber-500/20 border border-amber-500/50 text-amber-200 text-sm font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xl animate-fade-in">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+            <span>{approvalNotification}</span>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setAdminTab('receipts');
+                setReceiptFilter('screenshots');
+                setApprovalNotification(null);
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 transition-colors shadow cursor-pointer"
+            >
+              Inspect Slips Now
+            </button>
+            <button
+              onClick={() => setApprovalNotification(null)}
+              className="text-amber-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

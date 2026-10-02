@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, ArrowRight } from 'lucide-react';
+import { X, User as UserIcon, ArrowRight, Lock, AlertCircle } from 'lucide-react';
 import { User } from '../types';
 import { ADMIN_EMAIL, INITIAL_ADMIN_USER } from '../data/initialData';
-import { setCurrentUser, getStudents, saveStudents } from '../utils/storage';
+import { setCurrentUser, getStudents, saveStudents, authenticateUser } from '../utils/storage';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -21,45 +21,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   const [emailInput, setEmailInput] = useState('');
   const [nameInput, setNameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen) return null;
 
+  const isAdminEmail = emailInput.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
   const handleCustomLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg('');
     if (!emailInput.trim()) return;
 
     const email = emailInput.trim().toLowerCase();
     const isAdmin = email === ADMIN_EMAIL.toLowerCase();
 
+    if (isAdmin) {
+      try {
+        const adminUser = authenticateUser(email, passwordInput.trim(), nameInput.trim() || 'Guduru Alemayehu');
+        onUserChange(adminUser);
+        onClose();
+        return;
+      } catch (err: any) {
+        setErrorMsg(err?.message || 'Incorrect administrator password');
+        return;
+      }
+    }
+
     const newUser: User = {
       id: 'user-' + Date.now(),
       email,
-      name: nameInput.trim() || (isAdmin ? 'Guduru Alemayehu (Admin)' : email.split('@')[0]),
-      role: isAdmin ? 'admin' : 'student',
-      subscription: isAdmin
-        ? {
-            status: 'active',
-            planName: 'Super Admin Lifetime Pass',
-            activatedAt: '2025-01-01',
-            expiresAt: '2099-12-31'
-          }
-        : {
-            status: 'none'
-          },
+      name: nameInput.trim() || email.split('@')[0],
+      role: 'student',
+      subscription: {
+        status: 'none'
+      },
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    if (!isAdmin) {
-      const existingStudents = getStudents();
-      const existing = existingStudents.find((s) => s.email.toLowerCase() === email);
-      if (existing) {
-        setCurrentUser(existing);
-        onUserChange(existing);
-        onClose();
-        return;
-      }
-      saveStudents([newUser, ...existingStudents]);
+    const existingStudents = getStudents();
+    const existing = existingStudents.find((s) => s.email.toLowerCase() === email);
+    if (existing) {
+      setCurrentUser(existing);
+      onUserChange(existing);
+      onClose();
+      return;
     }
+    saveStudents([newUser, ...existingStudents]);
 
     setCurrentUser(newUser);
     onUserChange(newUser);
@@ -86,6 +94,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         </div>
 
+        {errorMsg && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
         {/* Custom Login Form */}
         <form onSubmit={handleCustomLogin} className="space-y-3.5" autoComplete="off">
           <div>
@@ -110,6 +125,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               className="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
             />
           </div>
+
+          {isAdminEmail && (
+            <div>
+              <label className="block text-xs font-medium text-amber-300 mb-1">
+                Administrator Password <span className="text-amber-400">*</span>
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <input
+                  type="password"
+                  required
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="Enter admin password"
+                  className="w-full pl-9 pr-3.5 py-2.5 bg-slate-800 border border-amber-500/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                />
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"

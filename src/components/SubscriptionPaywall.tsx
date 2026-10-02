@@ -25,7 +25,8 @@ import {
   CheckCircle2,
   Share2,
   Download,
-  ExternalLink
+  ExternalLink,
+  ShieldAlert
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, SubscriptionPlan, PromoCode } from '../types';
@@ -36,7 +37,8 @@ import {
   addTransaction,
   submitPaymentReceiptToServer,
   updateStudentSubscription,
-  setCurrentUser
+  setCurrentUser,
+  authenticateUser
 } from '../utils/storage';
 import { PaymentScreenshotUpload } from './common/PaymentScreenshotUpload';
 import { ReceiptViewerModal } from './common/ReceiptViewerModal';
@@ -270,9 +272,14 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
       expiresAt: expireDate.toISOString().split('T')[0]
     };
 
+    const studentUserId =
+      currentUser.id && currentUser.id !== 'student-demo' && !currentUser.id.includes('sample')
+        ? currentUser.id
+        : 'student-' + cleanStudentEmail.replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(1000 + Math.random() * 9000);
+
     const txPayload = {
       id: txId,
-      userId: currentUser.id,
+      userId: studentUserId,
       userEmail: cleanStudentEmail,
       userName: cleanContactPhone ? `${cleanStudentName} (${cleanContactPhone})` : cleanStudentName,
       planId: selectedPlan.id,
@@ -309,21 +316,23 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     addTransaction(deliveredTx);
     setCompletedTxRef(generatedRef);
 
-    // 3. Update current user to pending_verification
+    // 3. Update current user to pending_verification with unique ID
     const updatedUser: User = {
       ...currentUser,
+      id: studentUserId,
       name: cleanStudentName,
       email: cleanStudentEmail,
       subscription: deliveredSub
     };
 
     setCurrentUser(updatedUser);
-    updateStudentSubscription(currentUser.id, deliveredSub);
+    updateStudentSubscription(studentUserId, deliveredSub);
 
     setIsProcessing(false);
     setIsSuccess(true);
     setShowStatusView(true);
   };
+
 
   const handleFinishAndEnter = () => {
     onClose();
@@ -444,6 +453,17 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                   {currentUser.subscription?.status === 'active' ? 'Active Full Pass' : 'Pending Admin Verification'}
                 </span>
               </div>
+            </div>
+
+            {/* Delivery Confirmation */}
+            <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-2xl p-4 max-w-md mx-auto text-center space-y-2 shadow-lg">
+              <div className="flex items-center justify-center gap-2 text-emerald-300 font-extrabold text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>Payment Slip Received &amp; Transmitted</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Your receipt screenshot has been saved securely on the server and delivered to Teacher Guduru Alemayehu's review queue. Once Teacher Guduru checks and confirms your transfer, your semester pass will be activated automatically.
+              </p>
             </div>
 
             {/* Direct Mobile Forwarding Options */}

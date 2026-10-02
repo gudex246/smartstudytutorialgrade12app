@@ -26,6 +26,7 @@ interface NavbarProps {
   onOpenSubscriptionModal: () => void;
   onOpenInstallModal: () => void;
   onSignOut: () => void;
+  pendingReceiptCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -35,11 +36,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuthModal,
   onOpenSubscriptionModal,
   onOpenInstallModal,
-  onSignOut
+  onSignOut,
+  pendingReceiptCount = 0
 }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const user = currentUser || INITIAL_STUDENT_USER;
-  const isAdmin = Boolean(user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+  const isAdmin = Boolean(
+    (user.email && user.email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim()) ||
+    user.role === 'admin'
+  );
   const hasActiveSub = isAdmin || user.subscription?.status === 'active';
 
   useEffect(() => {
@@ -138,12 +143,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
             </button>
 
-            {/* Admin Dashboard Tab (Admin only) */}
-            {isAdmin && (
+            {/* Admin Dashboard Tab */}
+            {isAdmin ? (
               <button
                 id="nav-admin"
                 onClick={() => setActiveTab('admin')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   activeTab === 'admin'
                     ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
                     : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/20'
@@ -151,9 +156,24 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <ShieldAlert className="w-3.5 h-3.5" />
                 <span>Admin Panel</span>
-                <span className="text-[9px] bg-amber-400/30 text-amber-200 px-1.5 py-0.2 rounded font-bold">
-                  ADMIN
-                </span>
+                {pendingReceiptCount > 0 ? (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 animate-bounce shadow">
+                    {pendingReceiptCount} Pending
+                  </span>
+                ) : (
+                  <span className="text-[9px] bg-amber-400/30 text-amber-200 px-1.5 py-0.2 rounded font-bold">
+                    ADMIN
+                  </span>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={onOpenAuthModal}
+                className="text-slate-400 hover:text-amber-300 text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800/60 flex items-center gap-1.5 cursor-pointer transition-colors"
+                title="Teacher Guduru Admin Portal Access"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400/70" />
+                <span className="hidden lg:inline text-[11px]">Instructor</span>
               </button>
             )}
           </nav>
@@ -394,19 +414,36 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[10px] mt-0.5">AI Tutor</span>
           </button>
 
-          {isAdmin && (
+          {isAdmin ? (
             <button
               type="button"
               id="mobile-bottom-nav-admin"
               onClick={() => setActiveTab('admin')}
-              className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation active:scale-95 ${
+              className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation active:scale-95 relative ${
                 activeTab === 'admin'
                   ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/30 ring-1 ring-amber-300'
                   : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10'
               }`}
             >
-              <ShieldAlert className="w-4 h-4" />
-              <span className="text-[10px] mt-0.5">Admin</span>
+              <div className="relative">
+                <ShieldAlert className="w-4 h-4" />
+                {pendingReceiptCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 px-1 py-0.2 rounded-full text-[8px] font-black bg-amber-400 text-slate-950 animate-ping">
+                    {pendingReceiptCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] mt-0.5 font-bold">Admin</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              id="mobile-bottom-nav-instructor"
+              onClick={onOpenAuthModal}
+              className="flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation text-slate-400 hover:text-amber-300"
+            >
+              <ShieldAlert className="w-4 h-4 text-amber-400/70" />
+              <span className="text-[10px] mt-0.5">Instructor</span>
             </button>
           )}
         </div>

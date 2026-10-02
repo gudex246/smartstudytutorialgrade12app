@@ -24,6 +24,7 @@ import {
   getVideos,
   getNotes
 } from './utils/storage';
+import { subscribeToPaymentStream, getPendingReceiptCount } from './utils/paymentSync';
 import {
   Sparkles,
   BookOpen,
@@ -42,6 +43,8 @@ import {
 export default function App() {
   const [currentUser, setUserState] = useState<User | null>(getCurrentUser());
   const [activeTab, setActiveTab] = useState<'questions' | 'videos' | 'notes' | 'ai-tutor' | 'admin' | 'subscription' | 'profile'>('questions');
+  const [pendingReceiptCount, setPendingReceiptCount] = useState<number>(getPendingReceiptCount());
+  const [adminGlobalToast, setAdminGlobalToast] = useState<{ message: string; tx?: any } | null>(null);
 
   // Content state from storage
   const [questions, setQuestions] = useState<Question[]>(getQuestions());
@@ -52,7 +55,9 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(
+    typeof window !== 'undefined' ? (window as any).__pwaInstallPrompt || null : null
+  );
   const [isStandalone, setIsStandalone] = useState(false);
 
   // AI Tutor context forwarding
@@ -60,8 +65,18 @@ export default function App() {
   const [aiTutorContext, setAiTutorContext] = useState<string>('');
 
   const activeUser = currentUser || INITIAL_STUDENT_USER;
-  const isAdmin = Boolean(activeUser.email && (activeUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() || activeUser.role === 'admin'));
+  const isAdmin = Boolean(
+    (activeUser.email && activeUser.email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim()) ||
+    activeUser.role === 'admin'
+  );
   const isSubscribed = Boolean(activeUser.subscription?.status === 'active' || isAdmin);
+
+  // Enforce admin route security: non-admins cannot stay on admin tab
+  useEffect(() => {
+    if (activeTab === 'admin' && !isAdmin) {
+      setActiveTab('questions');
+    }
+  }, [activeTab, isAdmin]);
 
   // Listen for PWA beforeinstallprompt & handle automatic entrance prompt when people enter by link
   useEffect(() => {
@@ -84,6 +99,10 @@ export default function App() {
       }
     };
 
+    const handlePwaReady = (e: any) => {
+      setDeferredPrompt(e.detail || (window as any).__pwaInstallPrompt);
+    };
+
     const handleAppInstalled = () => {
       setIsStandalone(true);
       setDeferredPrompt(null);
@@ -91,7 +110,11 @@ export default function App() {
     };
 
     if (typeof window !== 'undefined') {
+      if ((window as any).__pwaInstallPrompt) {
+        setDeferredPrompt((window as any).__pwaInstallPrompt);
+      }
       window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.addEventListener('pwa-prompt-ready', handlePwaReady);
       window.addEventListener('appinstalled', handleAppInstalled);
     }
 
@@ -104,13 +127,21 @@ export default function App() {
           setIsInstallModalOpen(true);
           safeSessionStorage.setItem('smart_study_install_prompt_shown', 'true');
         }, 1200);
-        return () => clearTimeout(timer);
+        return () => {
+          clearTimeout(timer);
+          if (typeof window !== 'undefined') {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+            window.removeEventListener('pwa-prompt-ready', handlePwaReady);
+            window.removeEventListener('appinstalled', handleAppInstalled);
+          }
+        };
       }
     }
 
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+        window.removeEventListener('pwa-prompt-ready', handlePwaReady);
         window.removeEventListener('appinstalled', handleAppInstalled);
       }
     };
@@ -146,6 +177,25 @@ export default function App() {
     const interval = setInterval(syncStatus, 8000);
     return () => clearInterval(interval);
   }, [currentUser, activeUser.id, activeUser.email, activeUser.subscription?.status, isAdmin]);
+
+  // Real-time SSE payment event listener across whole app
+  useEffect(() => {
+    setPendingReceiptCount(getPendingReceiptCount());
+
+    const unsubscribe = subscribeToPaymentStream((type, payload) => {
+      if (type === 'new_payment' && payload.transaction) {
+        setPendingReceiptCount((prev) => prev + 1);
+        setAdminGlobalToast({
+          message: `🔔 New payment screenshot received from ${payload.transaction.userName || 'Student'} (${payload.transaction.currency || 'ETB '}${payload.transaction.amount})!`,
+          tx: payload.transaction
+        });
+      } else if (type === 'payment_approved' || type === 'payment_rejected') {
+        setPendingReceiptCount((prev) => Math.max(0, prev - 1));
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Refresh content from storage on tab change or updates
   const refreshContent = () => {
@@ -223,7 +273,35 @@ export default function App() {
         onOpenSubscriptionModal={() => setIsSubscriptionModalOpen(true)}
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onSignOut={handleSignOut}
+        pendingReceiptCount={pendingReceiptCount}
       />
+
+      {/* Real-time Global Receipt Alert for Admin */}
+      {adminGlobalToast && isAdmin && activeTab !== 'admin' && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-4 py-3 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sticky top-16 z-30 border-b border-amber-600 animate-pulse">
+          <div className="flex items-center gap-2.5 font-black text-xs sm:text-sm">
+            <span className="w-3 h-3 rounded-full bg-slate-950 animate-ping shrink-0"></span>
+            <span>{adminGlobalToast.message}</span>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              onClick={() => {
+                setActiveTab('admin');
+                setAdminGlobalToast(null);
+              }}
+              className="px-4 py-1.5 rounded-xl bg-slate-950 text-amber-300 font-black text-xs hover:bg-slate-900 transition-transform active:scale-95 cursor-pointer shadow-lg"
+            >
+              Open Admin Panel &amp; Verify
+            </button>
+            <button
+              onClick={() => setAdminGlobalToast(null)}
+              className="text-slate-950 hover:text-white p-1 text-sm font-black cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Hero Welcome / Subscription Ribbon for Students without active sub */}
       {!isAdmin && !isSubscribed && (
@@ -255,7 +333,7 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 md:pb-6">
         
         {/* Admin Dashboard */}
-        {activeTab === 'admin' && (
+        {activeTab === 'admin' && isAdmin && (
           <React.Suspense
             fallback={
               <div className="flex items-center justify-center min-h-[50vh]">

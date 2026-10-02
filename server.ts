@@ -27,6 +27,30 @@ try {
 }
 app.use('/api/uploads', express.static(UPLOADS_DIR));
 
+// PWA Service Worker & Manifest explicitly served with proper headers
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  const swPath = path.join(process.cwd(), 'public', 'sw.js');
+  if (fs.existsSync(swPath)) {
+    res.sendFile(swPath);
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
+app.get('/manifest.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const manifestPath = path.join(process.cwd(), 'public', 'manifest.json');
+  if (fs.existsSync(manifestPath)) {
+    res.sendFile(manifestPath);
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
 // Initialize Gemini Client
 const getGenAI = () => {
   return new GoogleGenAI({
@@ -463,6 +487,20 @@ const STUDENTS_FILE = path.join(DATA_DIR, 'students.json');
 let memoryTransactions: ServerTransaction[] | null = null;
 let memoryStudents: ServerStudent[] | null = null;
 
+// Real-time SSE event streaming for instant delivery of payment screenshots to Admin Panel
+const sseClients: Set<express.Response> = new Set();
+
+function broadcastPaymentEvent(event: string, data: any) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(payload);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+}
+
 function ensureDataDir() {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -507,7 +545,13 @@ function saveScreenshotFile(dataUrl: string, prefix = 'receipt'): string {
     if (svgMatch) {
       const filename = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.svg`;
       const filePath = path.join(UPLOADS_DIR, filename);
-      fs.writeFileSync(filePath, decodeURIComponent(svgMatch[1]), 'utf8');
+      let svgContent = svgMatch[1];
+      try {
+        svgContent = decodeURIComponent(svgMatch[1]);
+      } catch {
+        svgContent = svgMatch[1];
+      }
+      fs.writeFileSync(filePath, svgContent, 'utf8');
       console.log(`[STORAGE] Saved SVG receipt screenshot to disk: /api/uploads/${filename}`);
       return `/api/uploads/${filename}`;
     }
@@ -527,12 +571,19 @@ function loadServerTransactions(): ServerTransaction[] {
       const data = fs.readFileSync(TX_FILE, 'utf8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
+        let hasConversions = false;
         txs = parsed.map((t) => {
           if (t.screenshotUrl && t.screenshotUrl.startsWith('data:')) {
+            hasConversions = true;
             return { ...t, screenshotUrl: saveScreenshotFile(t.screenshotUrl, 'receipt') };
           }
           return t;
         });
+        if (hasConversions) {
+          try {
+            fs.writeFileSync(TX_FILE, JSON.stringify(txs, null, 2), 'utf8');
+          } catch {}
+        }
       }
     }
   } catch (e) {
@@ -810,6 +861,36 @@ ${appBaseUrl}`;
   return { sent: emailDispatched, method: deliveryMethod };
 }
 
+// 4b. Real-Time SSE Stream for Instant Payment Screenshot Delivery to Admin
+app.get('/api/payments/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof (res as any).flushHeaders === 'function') {
+    (res as any).flushHeaders();
+  }
+
+  sseClients.add(res);
+
+  // Send initial connected payload
+  res.write(`event: connected\ndata: ${JSON.stringify({ time: Date.now(), activeClients: sseClients.size })}\n\n`);
+
+  const keepAlive = setInterval(() => {
+    try {
+      res.write(': keepalive\n\n');
+    } catch {
+      clearInterval(keepAlive);
+      sseClients.delete(res);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    sseClients.delete(res);
+  });
+});
+
 // 5. Submit Payment & Screenshot (Called by student from any phone/browser)
 app.post('/api/payments/submit', (req, res) => {
   try {
@@ -846,6 +927,10 @@ app.post('/api/payments/submit', (req, res) => {
 
     // Save uploaded screenshot as a static image file on disk
     const hostedScreenshotUrl = saveScreenshotFile(screenshotUrl || '', 'receipt');
+    // Retain dataUrl if provided so image is permanently preserved in JSON across container resets
+    const finalScreenshotUrl = (screenshotUrl && typeof screenshotUrl === 'string' && screenshotUrl.startsWith('data:'))
+      ? screenshotUrl
+      : (hostedScreenshotUrl || screenshotUrl || '');
 
     // Subscription status is strictly PENDING until Admin Guduru Alemayehu verifies the screenshot
     const pendingSub = {
@@ -855,7 +940,7 @@ app.post('/api/payments/submit', (req, res) => {
       amountPaid: Number(amount) || 300,
       paymentMethod: paymentMethod || 'CBE Bank Transfer (1000521750255)',
       transactionId: txReference,
-      screenshotUrl: hostedScreenshotUrl,
+      screenshotUrl: finalScreenshotUrl,
       screenshotName: screenshotName || 'Payment_Receipt.jpg',
       activatedAt: new Date().toISOString().split('T')[0],
       expiresAt: expireDate.toISOString().split('T')[0]
@@ -867,20 +952,19 @@ app.post('/api/payments/submit', (req, res) => {
     const rawContactDigits = (userName || '').replace(/[^0-9]/g, '') || (userEmail || '').replace(/[^0-9]/g, '');
 
     const sIdx = students.findIndex((s) => {
-      if (s.id && (s.id === userId)) return true;
-      if (s.email && s.email.toLowerCase() === cleanLowerEmail) return true;
-      if (s.name && cleanLowerName) {
-        const sNameLower = s.name.toLowerCase();
-        if (sNameLower === cleanLowerName || cleanLowerName.includes(sNameLower) || sNameLower.includes(cleanLowerName)) return true;
-      }
+      // NEVER match generic demo ID!
+      if (userId && userId !== 'student-demo' && !userId.includes('sample') && s.id && (s.id === userId)) return true;
+      if (s.email && cleanLowerEmail && !s.email.includes('student.sample') && s.email.toLowerCase() === cleanLowerEmail) return true;
       if (rawContactDigits.length >= 8) {
         const sDigits = ((s.email || '') + (s.name || '')).replace(/[^0-9]/g, '');
-        if (sDigits && (sDigits.includes(rawContactDigits) || rawContactDigits.includes(sDigits))) return true;
+        if (sDigits && sDigits.includes(rawContactDigits)) return true;
       }
       return false;
     });
 
-    const targetUserId = sIdx >= 0 ? students[sIdx].id : (userId || 'student-' + Date.now());
+    const targetUserId = sIdx >= 0 
+      ? students[sIdx].id 
+      : (userId && userId !== 'student-demo' && !userId.includes('sample') ? userId : 'student-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6));
 
     const newTx: ServerTransaction = {
       id: txId,
@@ -894,7 +978,7 @@ app.post('/api/payments/submit', (req, res) => {
       paymentMethod: pendingSub.paymentMethod,
       status: 'pending', // PENDING: Requires Admin Guduru Alemayehu verification
       referenceNo: txReference,
-      screenshotUrl: hostedScreenshotUrl,
+      screenshotUrl: finalScreenshotUrl,
       screenshotName: screenshotName || 'Payment_Receipt.jpg',
       createdAt: createdAt || new Date().toISOString().split('T')[0]
     };
@@ -911,6 +995,7 @@ app.post('/api/payments/submit', (req, res) => {
     saveServerTransactions(txs);
 
     // Update student subscription status to PENDING_VERIFICATION (not active yet)
+    let finalStudent: ServerStudent;
     if (sIdx >= 0) {
       students[sIdx] = {
         ...students[sIdx],
@@ -918,21 +1003,31 @@ app.post('/api/payments/submit', (req, res) => {
         email: students[sIdx].email && !students[sIdx].email.includes('student.sample') ? students[sIdx].email : cleanEmail,
         subscription: pendingSub
       };
+      finalStudent = students[sIdx];
     } else {
-      students.unshift({
+      finalStudent = {
         id: targetUserId,
         email: cleanEmail,
         name: resolvedName,
         role: 'student',
         subscription: pendingSub,
         createdAt: newTx.createdAt
-      });
+      };
+      students.unshift(finalStudent);
     }
     saveServerStudents(students);
 
     console.log(`[PAYMENT SCREENSHOT DELIVERED TO ADMIN] Student ${resolvedName} (${cleanEmail}) submitted ${newTx.currency}${newTx.amount}. Screenshot stored at ${hostedScreenshotUrl} for Admin Guduru Alemayehu verification.`);
 
-    // Dispatch automated email notification directly to Admin Guduru Alemayehu (gudurualemayehu29@gmail.com)
+    // 1. Broadcast LIVE SSE event to Admin Panel active screens immediately!
+    broadcastPaymentEvent('new_payment', {
+      transaction: newTx,
+      student: finalStudent,
+      pendingCount: txs.filter((t) => t.status === 'pending').length,
+      timestamp: Date.now()
+    });
+
+    // 2. Dispatch automated email notification directly to Admin Guduru Alemayehu (gudurualemayehu29@gmail.com)
     sendPaymentReceiptEmailToAdmin(newTx)
       .then((emailRes) => {
         console.log(`[PAYMENT EMAIL NOTIFICATION] Result for ${ADMIN_TARGET_EMAIL}: sent=${emailRes.sent}, method=${emailRes.method}`);
@@ -1157,6 +1252,17 @@ app.post('/api/payments/approve', (req, res) => {
 
     console.log(`[PAYMENT APPROVED] Access unlocked for ${student?.name || tx?.userName} (${student?.email || tx?.userEmail})`);
 
+    // Broadcast LIVE SSE event to all connected screens
+    broadcastPaymentEvent('payment_approved', {
+      txId: tx?.id,
+      studentId: student?.id,
+      studentName: student?.name || tx?.userName,
+      transaction: tx,
+      student: student,
+      pendingCount: txs.filter((t) => t.status === 'pending').length,
+      timestamp: Date.now()
+    });
+
     res.json({
       success: true,
       message: `Payment verified! One semester full access activated for ${student?.name || tx?.userName}.`,
@@ -1199,6 +1305,13 @@ app.post('/api/payments/reject', (req, res) => {
         saveServerStudents(students);
       }
     }
+
+    broadcastPaymentEvent('payment_rejected', {
+      txId,
+      studentId,
+      pendingCount: txs.filter((t) => t.status === 'pending').length,
+      timestamp: Date.now()
+    });
 
     res.json({
       success: true,

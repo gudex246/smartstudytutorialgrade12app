@@ -9,10 +9,14 @@ import {
   Download,
   Smartphone,
   HelpCircle,
-  Share2
+  Share2,
+  Lock,
+  GraduationCap,
+  ShieldCheck
 } from 'lucide-react';
 import { User } from '../types';
 import { authenticateUser } from '../utils/storage';
+import { ADMIN_EMAIL } from '../data/constants';
 
 interface SignInPageProps {
   onSignInSuccess: (user: User) => void;
@@ -27,8 +31,10 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   onOpenInstallModal,
   isStandalone = false
 }) => {
+  const [authMode, setAuthMode] = useState<'student' | 'admin'>('student');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [stream, setStream] = useState<'Natural Science' | 'Social Science'>('Natural Science');
   const [errorMsg, setErrorMsg] = useState('');
   const [isInstalling, setIsInstalling] = useState(false);
@@ -37,16 +43,20 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   const isIOS = typeof window !== 'undefined' && /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
+    // Check both passed prop and window global captured in index.html
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? (window as any).__pwaInstallPrompt : null);
+
+    if (promptEvent && typeof promptEvent.prompt === 'function') {
       setIsInstalling(true);
       try {
-        await deferredPrompt.prompt();
-        const choice = await deferredPrompt.userChoice;
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
         if (choice.outcome === 'accepted') {
-          // Installed
+          // Installed successfully
         }
       } catch (err) {
         console.error('Install prompt error:', err);
+        if (onOpenInstallModal) onOpenInstallModal();
       } finally {
         setIsInstalling(false);
       }
@@ -54,6 +64,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
       setShowIOSHint(true);
       if (onOpenInstallModal) onOpenInstallModal();
     } else {
+      // Fallback for browsers that don't emit programmatic prompt (Firefox, webviews, Safari)
       if (onOpenInstallModal) onOpenInstallModal();
     }
   };
@@ -62,6 +73,26 @@ export const SignInPage: React.FC<SignInPageProps> = ({
     e.preventDefault();
     setErrorMsg('');
 
+    if (authMode === 'admin') {
+      const cleanEmail = email.trim().toLowerCase();
+      if (cleanEmail !== ADMIN_EMAIL.toLowerCase()) {
+        setErrorMsg(`Administrator login is restricted to Teacher Guduru (${ADMIN_EMAIL})`);
+        return;
+      }
+      if (!adminPassword.trim()) {
+        setErrorMsg('Please enter the Administrator Password');
+        return;
+      }
+      try {
+        const user = authenticateUser(cleanEmail, adminPassword.trim(), 'Guduru Alemayehu');
+        onSignInSuccess(user);
+      } catch (err: any) {
+        setErrorMsg(err?.message || 'Incorrect administrator password');
+      }
+      return;
+    }
+
+    // Student Login
     if (!name.trim()) {
       setErrorMsg('Please enter your full name');
       return;
@@ -72,7 +103,12 @@ export const SignInPage: React.FC<SignInPageProps> = ({
       return;
     }
 
-    // Basic email format check
+    // Prevent student from masquerading as admin email without admin password
+    if (email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      setErrorMsg('This is the Instructor email. Switch to the Teacher Login tab above and enter the password.');
+      return;
+    }
+
     if (!email.includes('@') || !email.includes('.')) {
       setErrorMsg('Please enter a valid email address (e.g. name@gmail.com)');
       return;
@@ -81,7 +117,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
     try {
       const user = authenticateUser(
         email.trim(),
-        '123456',
+        'student-pass',
         name.trim(),
         stream
       );
@@ -177,13 +213,60 @@ export const SignInPage: React.FC<SignInPageProps> = ({
         {/* Main Sign In / Entrance Card */}
         <div className="bg-slate-900/90 border border-slate-800/90 rounded-3xl p-5 sm:p-7 shadow-2xl backdrop-blur-md">
           
+          {/* Mode Selector Tabs */}
+          <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-5">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode('student');
+                setErrorMsg('');
+                if (email === ADMIN_EMAIL) setEmail('');
+              }}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                authMode === 'student'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4" />
+              <span>Student Entrance</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode('admin');
+                setErrorMsg('');
+                setEmail(ADMIN_EMAIL);
+              }}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                authMode === 'admin'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-amber-300'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Teacher / Admin</span>
+            </button>
+          </div>
+
           <div className="mb-5 pb-3 border-b border-slate-800/80">
             <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-              <UserIcon className="w-5 h-5 text-indigo-400" />
-              <span>Enter Your Name & Email to Start</span>
+              {authMode === 'admin' ? (
+                <>
+                  <ShieldCheck className="w-5 h-5 text-amber-400" />
+                  <span>Teacher Guduru Admin Portal</span>
+                </>
+              ) : (
+                <>
+                  <UserIcon className="w-5 h-5 text-indigo-400" />
+                  <span>Enter Your Name & Email to Start</span>
+                </>
+              )}
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              New students get instant Free Review access. Returning students resume saved quiz progress!
+              {authMode === 'admin'
+                ? 'Authorized access for course instructor Guduru Alemayehu to review slips & manage content.'
+                : 'New students get instant Free Review access. Returning students resume saved quiz progress!'}
             </p>
           </div>
 
@@ -198,69 +281,122 @@ export const SignInPage: React.FC<SignInPageProps> = ({
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             
-            {/* Full Name */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Full Name <span className="text-rose-400">*</span>
-              </label>
-              <div className="relative">
-                <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  id="signin-name-input"
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Samuel Kebede"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-            </div>
+            {authMode === 'student' ? (
+              <>
+                {/* Full Name */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Full Name <span className="text-rose-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      id="signin-name-input"
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Samuel Kebede"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
 
-            {/* Email Address */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Email Address <span className="text-rose-400">*</span>
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  id="signin-email-input"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. yourname@gmail.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-            </div>
+                {/* Email Address */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Email Address <span className="text-rose-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      id="signin-email-input"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="e.g. yourname@gmail.com"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
 
-            {/* Academic Stream */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Academic Stream
-              </label>
-              <select
-                id="signin-stream-select"
-                value={stream}
-                onChange={(e) => setStream(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
-              >
-                <option value="Natural Science">Grade 12 Natural Science (Maths, Physics, Chem, Bio)</option>
-                <option value="Social Science">Grade 12 Social Science (Maths, Economics, History, Geog)</option>
-              </select>
-            </div>
+                {/* Academic Stream */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Academic Stream
+                  </label>
+                  <select
+                    id="signin-stream-select"
+                    value={stream}
+                    onChange={(e) => setStream(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+                  >
+                    <option value="Natural Science">Grade 12 Natural Science (Maths, Physics, Chem, Bio)</option>
+                    <option value="Social Science">Grade 12 Social Science (Maths, Economics, History, Geog)</option>
+                  </select>
+                </div>
 
-            {/* Primary Submit Button */}
-            <button
-              type="submit"
-              id="auth-submit-btn"
-              className="w-full mt-3 py-3 bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-98 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
-            >
-              <span>Enter Smart Study Portal</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+                {/* Primary Student Submit Button */}
+                <button
+                  type="submit"
+                  id="auth-submit-btn"
+                  className="w-full mt-3 py-3 bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-98 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <span>Enter Smart Study Portal</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Admin Email */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Administrator Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      id="admin-email-input"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Admin Password */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Administrator Password <span className="text-amber-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      id="admin-password-input"
+                      type="password"
+                      required
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="Enter course admin password"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Admin Submit Button */}
+                <button
+                  type="submit"
+                  id="admin-submit-btn"
+                  className="w-full mt-3 py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:from-amber-400 hover:to-amber-500 active:scale-98 text-slate-950 font-extrabold text-sm rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Sign In as Course Administrator</span>
+                </button>
+              </>
+            )}
           </form>
 
           {/* Access Policy Explainer */}
@@ -270,10 +406,10 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               <span>Membership & Semester Fee:</span>
             </div>
             <p>
-              • <strong>Course Instructor & Super Admin:</strong> Full access to manage questions, videos, notes, student subscriptions, and verify payment receipts.
+              • <strong>Course Instructor:</strong> Protected access to verify student payment slips, upload video lectures, and manage study content.
             </p>
             <p>
-              • <strong>All Students:</strong> Instant Free Review mode. Unlimited access to all 80+ entrance exam solutions and notes unlocks for <strong>300 ETB / semester</strong> (CBE: 1000521750255 | Telebirr: 0953201048 under Guduru Alemayehu).
+              • <strong>All Students:</strong> Instant Free Review access. Unlock complete 80+ entrance exam full solutions, videos, and revision notes for <strong>300 ETB / semester</strong> (CBE: 1000521750255 | Telebirr: 0953201048 under Guduru Alemayehu).
             </p>
           </div>
         </div>

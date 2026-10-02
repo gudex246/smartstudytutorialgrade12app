@@ -83,27 +83,28 @@
         window.location.reload();
       });
     </script>
+    <script>
+      // Early capture of PWA beforeinstallprompt event before React mounts
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__pwaInstallPrompt = e;
+        window.dispatchEvent(new CustomEvent('pwa-prompt-ready', { detail: e }));
+      });
+    </script>
 
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // Register PWA Service Worker unconditionally for mobile installability
       if ('serviceWorker' in navigator) {
-        if (window.location.hostname.includes('localhost') || window.location.hostname.includes('ais-dev') || window.location.hostname.includes('run.app')) {
-          navigator.serviceWorker.getRegistrations().then((registrations) => {
-            for (const registration of registrations) {
-              registration.unregister();
-            }
-          });
-        } else {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js', { scope: '/' })
-              .then((reg) => {
-                reg.update();
-              })
-              .catch((err) => {
-                console.warn('PWA Service Worker note:', err);
-              });
-          });
-        }
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(reg) {
+              reg.update();
+            })
+            .catch(function(err) {
+              console.warn('PWA Service Worker note:', err);
+            });
+        });
       }
     </script>
   </body>
