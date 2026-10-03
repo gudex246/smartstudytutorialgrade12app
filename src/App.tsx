@@ -153,7 +153,10 @@ export default function App() {
 
     const syncStatus = async () => {
       try {
-        const res = await fetch(`/api/payments/status?userId=${encodeURIComponent(activeUser.id)}&email=${encodeURIComponent(activeUser.email)}`);
+        const phoneDigits = ((activeUser.email || '') + ' ' + (activeUser.name || '')).replace(/[^0-9]/g, '');
+        const res = await fetch(
+          `/api/payments/status?userId=${encodeURIComponent(activeUser.id)}&email=${encodeURIComponent(activeUser.email)}&phone=${encodeURIComponent(phoneDigits)}&t=${Date.now()}`
+        );
         if (res.ok) {
           const data = await res.json();
           if (data && data.subscription) {
@@ -165,6 +168,7 @@ export default function App() {
               };
               setCurrentUser(updated);
               setUserState(updated);
+              refreshContent();
             }
           }
         }
@@ -174,7 +178,7 @@ export default function App() {
     };
 
     syncStatus();
-    const interval = setInterval(syncStatus, 8000);
+    const interval = setInterval(syncStatus, 5000);
     return () => clearInterval(interval);
   }, [currentUser, activeUser.id, activeUser.email, activeUser.subscription?.status, isAdmin]);
 

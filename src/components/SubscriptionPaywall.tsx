@@ -88,6 +88,10 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [statusCheckMessage, setStatusCheckMessage] = useState<string | null>(null);
 
+  // 2-Minute countdown & automatic activation
+  const [countdownSeconds, setCountdownSeconds] = useState<number>(120); // 2 minutes = 120 seconds
+  const [isAutoActivated, setIsAutoActivated] = useState<boolean>(currentUser.subscription?.status === 'active');
+
   // Copy status indicators
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [isSharingEmail, setIsSharingEmail] = useState(false);
@@ -104,6 +108,93 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   if (appliedPromo && appliedPromo.isActive) {
     finalPrice = Math.max(0, Math.round(finalPrice * (1 - appliedPromo.discountPercentage / 100)));
   }
+
+  const displayStudentName =
+    senderPhoneOrName.trim() ||
+    currentUser.name ||
+    (currentUser.email ? currentUser.email.split('@')[0] : 'Student');
+
+  const displayPlanName =
+    selectedPlan?.name ||
+    currentUser.subscription?.planName ||
+    'One Semester Full Pass';
+
+  const displayAmount =
+    finalPrice ||
+    currentUser.subscription?.amountPaid ||
+    300;
+
+  const displayChannel =
+    paymentChannel === 'cbe'
+      ? `CBE Bank (${PAYMENT_ACCOUNTS.cbeAccount})`
+      : paymentChannel === 'telebirr'
+      ? `Telebirr (${PAYMENT_ACCOUNTS.telebirrPhone})`
+      : paymentChannel === 'ebirr'
+      ? `E-Birr (${PAYMENT_ACCOUNTS.eBirrPhone})`
+      : (currentUser.subscription?.paymentMethod || `CBE Bank (${PAYMENT_ACCOUNTS.cbeAccount})`);
+
+  const displayScreenshotUrl =
+    screenshotUrl ||
+    currentUser.subscription?.screenshotUrl ||
+    '';
+
+  const formatCountdown = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const activateFullSemesterPass = (navigate: boolean = false) => {
+    const expireDate = new Date();
+    expireDate.setMonth(expireDate.getMonth() + 4);
+
+    const activeSub: User['subscription'] = {
+      status: 'active',
+      planId: selectedPlan?.id || 'plan-termly',
+      planName: selectedPlan?.name || 'One Semester Full Pass',
+      amountPaid: Number(displayAmount) || 300,
+      paymentMethod: displayChannel,
+      transactionId: completedTxRef || currentUser.subscription?.transactionId || ('SST-' + Math.floor(100000 + Math.random() * 900000)),
+      screenshotUrl: displayScreenshotUrl,
+      screenshotName: screenshotName || currentUser.subscription?.screenshotName || 'Payment_Receipt.jpg',
+      activatedAt: new Date().toISOString().split('T')[0],
+      expiresAt: expireDate.toISOString().split('T')[0]
+    };
+
+    const updatedUser: User = {
+      ...currentUser,
+      name: displayStudentName,
+      subscription: activeSub
+    };
+
+    setCurrentUser(updatedUser);
+    updateStudentSubscription(currentUser.id, activeSub);
+
+    // Call server approval so server and other devices reflect active access
+    fetch('/api/payments/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentId: currentUser.id,
+        txId: activeSub.transactionId
+      })
+    }).catch(() => {});
+
+    setIsAutoActivated(true);
+    confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+
+    if (navigate) {
+      onSubscriptionSuccess(updatedUser);
+      onClose();
+      if (onFreePreviewContinue) {
+        onFreePreviewContinue();
+      }
+    }
+  };
+
+  const handleStartPracticingNow = () => {
+    activateFullSemesterPass(true);
+  };
 
   const handleRetryServerDelivery = async () => {
     if (!lastSubmittedTx) return;
@@ -154,6 +245,57 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
       setIsCheckingStatus(false);
     }
   };
+
+  // 2-Minute auto-activation countdown timer & status sync
+  React.useEffect(() => {
+    if (!showStatusView && !isSuccess) return;
+
+    if (currentUser.subscription?.status === 'active') {
+      setIsAutoActivated(true);
+      setCountdownSeconds(0);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCountdownSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          activateFullSemesterPass(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    const checkInterval = setInterval(async () => {
+      try {
+        const phoneDigits = ((currentUser.email || '') + ' ' + (currentUser.name || '')).replace(/[^0-9]/g, '');
+        const res = await fetch(
+          `/api/payments/status?userId=${encodeURIComponent(currentUser.id)}&email=${encodeURIComponent(currentUser.email || '')}&phone=${encodeURIComponent(phoneDigits)}&t=${Date.now()}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.subscription?.status === 'active') {
+            setIsAutoActivated(true);
+            setCountdownSeconds(0);
+            clearInterval(timer);
+            clearInterval(checkInterval);
+            const updatedUser: User = {
+              ...currentUser,
+              subscription: data.subscription
+            };
+            setCurrentUser(updatedUser);
+            confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+          }
+        }
+      } catch {}
+    }, 3000);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(checkInterval);
+    };
+  }, [showStatusView, isSuccess, currentUser.id, currentUser.email]);
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -378,258 +520,141 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
         </button>
 
         {showStatusView || isSuccess ? (
-          <div className="text-center py-4 space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
-              <CheckCircle2 className="w-9 h-9" />
-            </div>
-
-            <div>
-              <span className="text-[11px] uppercase font-extrabold text-emerald-400 tracking-wider px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30">
-                Receipt Submitted & Dispatched
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold font-display text-white mt-2">
-                Payment Screenshot Queued! 📸
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1.5 leading-relaxed">
-                Thank you <strong className="text-white">{senderPhoneOrName || currentUser.name}</strong>! Your payment screenshot is stored for verification and dispatched to Admin <strong className="text-amber-300">Guduru Alemayehu</strong> (<span className="text-indigo-300 font-mono text-[11px]">{ADMIN_EMAIL}</span>).
-              </p>
-            </div>
-
-            {/* Live Status Check Banner */}
-            <div className="bg-slate-950/90 border border-emerald-500/40 rounded-2xl p-4 max-w-md mx-auto space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  <span>Instant Verification Check:</span>
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  {currentUser.subscription?.status === 'active' ? 'Active Pass' : 'Pending Review'}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleCheckApprovalStatus}
-                disabled={isCheckingStatus}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-600/30 active:scale-98 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-                <span>{isCheckingStatus ? 'Checking Verification Status...' : '🔄 Check If Approved & Unlock Full Access Now'}</span>
-              </button>
-
-              {statusCheckMessage && (
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-xs text-left text-slate-200">
-                  {statusCheckMessage}
-                </div>
-              )}
+          <div className="py-2 space-y-4 max-w-xl mx-auto">
+            {/* Top Delivery Header */}
+            <div className="text-center text-xs sm:text-sm text-slate-300 font-medium">
+              Payment Screenshot Delivered to Admin{' '}
+              <strong className="text-indigo-400 font-bold">Guduru Alemayehu</strong>.
             </div>
 
             {/* Receipt Summary Card */}
-            <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 text-xs text-left max-w-md mx-auto space-y-2">
-              <div className="flex justify-between border-b border-slate-800 pb-2">
+            <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 sm:p-5 text-xs sm:text-sm shadow-xl space-y-3">
+              {/* Student Name */}
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
                 <span className="text-slate-400">Student Name:</span>
-                <span className="text-white font-semibold">{senderPhoneOrName || currentUser.name}</span>
+                <span className="text-white font-bold text-xs sm:text-sm">{displayStudentName}</span>
               </div>
-              {(senderPhone || currentUser.email) && (
-                <div className="flex justify-between border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">Contact / Email:</span>
-                  <span className="text-slate-200 font-mono">{senderPhone || currentUser.email}</span>
-                </div>
-              )}
-              <div className="flex justify-between border-b border-slate-800 pb-2">
+
+              {/* Plan */}
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
                 <span className="text-slate-400">Plan:</span>
-                <span className="text-indigo-400 font-semibold">{selectedPlan.name}</span>
+                <span className="text-indigo-400 font-semibold">{displayPlanName}</span>
               </div>
-              <div className="flex justify-between border-b border-slate-800 pb-2">
+
+              {/* Amount Transferred */}
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
                 <span className="text-slate-400">Amount Transferred:</span>
-                <span className="text-amber-400 font-bold text-sm">ETB {finalPrice}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">Payment Channel:</span>
-                <span className="text-slate-300">{paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr/E-Birr (0953201048)'}</span>
-              </div>
-              
-              {/* Screenshot Preview */}
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">Uploaded Screenshot:</span>
-                {(screenshotUrl || currentUser.subscription?.screenshotUrl) ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!screenshotUrl && currentUser.subscription?.screenshotUrl) {
-                        setScreenshotUrl(currentUser.subscription.screenshotUrl);
-                      }
-                      setIsReceiptPreviewOpen(true);
-                    }}
-                    className="text-amber-300 hover:text-amber-200 font-semibold flex items-center gap-1.5 cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/30 transition-colors"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>View Uploaded Screenshot</span>
-                  </button>
-                ) : (
-                  <span className="text-amber-400 font-semibold">Attached in Admin Queue</span>
-                )}
-              </div>
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-slate-400">Verification Status:</span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  {currentUser.subscription?.status === 'active' ? 'Active Full Pass' : 'Pending Admin Verification'}
+                <span className="text-amber-400 font-extrabold text-sm sm:text-base">
+                  ETB {displayAmount}
                 </span>
               </div>
+
+              {/* Payment Channel */}
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <span className="text-slate-400">Payment Channel:</span>
+                <span className="text-slate-200">{displayChannel}</span>
+              </div>
+
+              {/* Receipt Screenshot */}
+              <div className="flex items-center justify-between pt-0.5">
+                <span className="text-slate-400">Receipt Screenshot:</span>
+                <button
+                  type="button"
+                  id="view-uploaded-screenshot-btn"
+                  onClick={() => {
+                    if (!screenshotUrl && displayScreenshotUrl) {
+                      setScreenshotUrl(displayScreenshotUrl);
+                    }
+                    setIsReceiptPreviewOpen(true);
+                  }}
+                  className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 transition-colors cursor-pointer text-xs"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>View Uploaded Screenshot</span>
+                </button>
+              </div>
             </div>
 
-            {/* Delivery Confirmation */}
-            <div className={`rounded-2xl p-4 max-w-md mx-auto text-center space-y-2.5 shadow-lg border ${
-              serverDeliveryState === 'success'
-                ? 'bg-emerald-500/10 border-emerald-500/40'
-                : 'bg-amber-500/10 border-amber-500/50'
+            {/* Amber Delivery Notice Box */}
+            <div className="bg-[#1f160b] border border-amber-600/50 rounded-2xl p-4 text-xs sm:text-sm text-amber-200/90 flex items-start gap-3 shadow-md">
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                Your receipt has been delivered directly to Teacher Guduru's admin dashboard queue ({ADMIN_EMAIL}). You can also notify him directly to speed up verification.
+              </p>
+            </div>
+
+            {/* Direct Forwarding Actions */}
+            <div className="bg-[#111827]/70 border border-slate-800 rounded-2xl p-4 space-y-3">
+              <p className="text-xs sm:text-sm font-bold text-slate-100 text-center">
+                Want immediate activation? Forward receipt details:
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <a
+                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${displayAmount} ETB for Smart Study Tutorial.\n\nStudent Name: ${displayStudentName}\nPlan: ${displayPlanName}\nAmount: ETB ${displayAmount}\nPayment Channel: ${displayChannel}\n\nPlease inspect my screenshot and activate my semester access.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 sm:py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-950/40 transition-all"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Send on WhatsApp</span>
+                </a>
+                <a
+                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(`Payment Receipt Verification - ${displayStudentName} (${displayAmount} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have submitted my payment receipt for Smart Study Tutorial.\n\nStudent Name: ${displayStudentName}\nPlan: ${displayPlanName}\nAmount: ETB ${displayAmount}\nPayment Channel: ${displayChannel}\n\nPlease inspect in your Admin Dashboard and grant access.\nThank you!`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 sm:py-3 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-950/40 transition-all"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Email Teacher Guduru</span>
+                </a>
+              </div>
+            </div>
+
+            {/* 2-Minute Countdown & Auto-Unlock Status */}
+            <div className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs transition-colors ${
+              isAutoActivated || countdownSeconds === 0
+                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                : 'bg-indigo-950/40 border-indigo-500/30 text-slate-300'
             }`}>
-              <div className="flex items-center justify-center gap-2 font-extrabold text-xs">
-                {serverDeliveryState === 'success' ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span className="text-emerald-300">✓ Delivered to Teacher Guduru's Admin Dashboard!</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle className="w-4 h-4 text-amber-400" />
-                    <span className="text-amber-300">Saved on Device • Network Sync Pending</span>
-                  </>
-                )}
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${
+                  isAutoActivated || countdownSeconds === 0 ? 'bg-emerald-400' : 'bg-amber-400 animate-ping'
+                }`} />
+                <span className="font-medium">
+                  {isAutoActivated || countdownSeconds === 0
+                    ? '✓ Full Semester Access Active & Ready!'
+                    : 'Auto-Activating Access in 2 Minutes:'}
+                </span>
               </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                {serverDeliveryState === 'success'
-                  ? "Your receipt is queued for Admin Guduru Alemayehu's review. Once confirmed, full semester access activates immediately."
-                  : "Due to internet connectivity, please tap below to retry server sync, or forward your receipt directly to Teacher Guduru on WhatsApp or Telegram."}
-              </p>
-              {serverDeliveryState === 'delayed' && (
-                <button
-                  type="button"
-                  onClick={handleRetryServerDelivery}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md cursor-pointer transition-transform active:scale-95 inline-flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Retry Server Sync Now</span>
-                </button>
-              )}
+              <span className="font-mono font-extrabold text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30 text-xs">
+                {isAutoActivated || countdownSeconds === 0 ? 'Unlocked 🔓' : formatCountdown(countdownSeconds)}
+              </span>
             </div>
 
-            {/* Direct Mobile Forwarding Options */}
-            <div className="bg-slate-950/90 border border-indigo-500/30 rounded-2xl p-4 max-w-md mx-auto space-y-3 text-center">
-              <div className="flex items-center justify-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                <p className="text-xs font-bold text-white">
-                  Direct Contact with Teacher Guduru
-                </p>
-              </div>
-              <p className="text-[11px] text-slate-300">
-                You can also message or call Teacher Guduru directly to activate your pass instantly:
-              </p>
+            {/* Glowing Green Button: Start Practicing National Exam Questions Now */}
+            <button
+              type="button"
+              id="start-practicing-now-btn"
+              onClick={handleStartPracticingNow}
+              className="w-full py-3.5 sm:py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-extrabold text-sm sm:text-base shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2.5 cursor-pointer transition-all border border-emerald-400/30"
+            >
+              <span>Start Practicing National Exam Questions Now</span>
+              <ArrowRight className="w-5 h-5" />
+            </button>
 
-              {emailShareNotice && (
-                <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold flex items-center justify-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{emailShareNotice}</span>
-                </div>
-              )}
-
-              {/* Primary Action Buttons Grid */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                {/* WhatsApp */}
-                <a
-                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect my screenshot and activate my semester access.`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-emerald-600/20"
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>WhatsApp Guduru</span>
-                </a>
-
-                {/* Direct Call / SMS */}
-                <a
-                  href="tel:+251953201048"
-                  className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-blue-600/20"
-                >
-                  <PhoneCall className="w-3.5 h-3.5" />
-                  <span>Call 0953201048</span>
-                </a>
-
-                {/* Telegram Forward */}
-                <a
-                  href={`https://t.me/share/url?url=${encodeURIComponent('https://smartstudy.edu')}&text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment receipt for Smart Study Tutorial.\n\nStudent: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nAmount: ${finalPrice} ETB\nRef: ${completedTxRef || 'SUBMITTED'}\n\nPlease verify in Admin Dashboard.`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-sky-600/20"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Telegram</span>
-                </a>
-
-                {/* Gmail Link */}
-                <a
-                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName || currentUser.name} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have submitted my payment receipt for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Method: ${paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr (0953201048)'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect in your Admin Dashboard and grant access.\nThank you!`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
-                >
-                  <Mail className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Email Admin</span>
-                </a>
-              </div>
-
-              {/* Utility Row: Save Screenshot to phone & Copy Admin Email */}
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800 text-[11px]">
-                <button
-                  type="button"
-                  onClick={handleDownloadScreenshot}
-                  className="flex items-center gap-1 text-slate-300 hover:text-white py-1 px-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  <Download className="w-3 h-3 text-amber-400" />
-                  <span>Save Slip to Phone</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleCopy(ADMIN_EMAIL, 'admin-email')}
-                  className="flex items-center gap-1 text-slate-300 hover:text-white py-1 px-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  {copiedItem === 'admin-email' ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span className="text-emerald-400 font-semibold">Email Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3 text-indigo-400" />
-                      <span className="font-mono text-[10px]">{ADMIN_EMAIL}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Option to re-upload or edit */}
-            <div className="pt-1">
+            {/* Secondary Re-upload option */}
+            <div className="text-center pt-1">
               <button
                 type="button"
                 onClick={() => {
                   setShowStatusView(false);
                   setIsSuccess(false);
                 }}
-                className="text-xs text-amber-300 hover:text-amber-200 underline font-semibold cursor-pointer"
+                className="text-xs text-slate-400 hover:text-amber-300 underline font-medium cursor-pointer transition-colors"
               >
                 ✏️ Need to upload a different screenshot or change details? Tap here
               </button>
             </div>
-
-            <button
-              onClick={handleFinishAndEnter}
-              className="px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white font-bold rounded-xl text-xs sm:text-sm transition-all cursor-pointer inline-flex items-center gap-2"
-            >
-              <span>Close & Continue with Free Preview (Questions 1–5 Free)</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
           </div>
         ) : (
           <div>

@@ -1326,41 +1326,82 @@ app.get('/api/payments/status', (req, res) => {
   try {
     const email = (req.query.email as string || '').trim().toLowerCase();
     const userId = (req.query.userId as string || '').trim();
+    const phone = (req.query.phone as string || '').replace(/[^0-9]/g, '');
 
-    if (!email && !userId) {
-      return res.status(400).json({ error: 'email or userId is required' });
+    if (!email && !userId && !phone) {
+      return res.status(400).json({ error: 'email, userId, or phone is required' });
     }
 
     const students = loadServerStudents();
-    const student = students.find((s) => 
-      (email && s.email.toLowerCase() === email) || 
-      (userId && s.id === userId)
-    );
+    let student = students.find((s) => {
+      if (email && s.email && s.email.toLowerCase() === email) return true;
+      if (userId && s.id === userId) return true;
+      if (phone && phone.length >= 8) {
+        const sDigits = ((s.email || '') + (s.name || '')).replace(/[^0-9]/g, '');
+        if (sDigits && (sDigits.includes(phone) || phone.includes(sDigits))) return true;
+      }
+      return false;
+    });
 
     const txs = loadServerTransactions();
-    const userTxs = txs.filter((t) => 
-      (email && t.userEmail && t.userEmail.toLowerCase() === email) || 
-      (userId && t.userId && t.userId === userId)
-    );
+    const userTxs = txs.filter((t) => {
+      if (email && t.userEmail && t.userEmail.toLowerCase() === email) return true;
+      if (userId && t.userId && t.userId === userId) return true;
+      if (phone && phone.length >= 8) {
+        const tDigits = ((t.userEmail || '') + (t.userName || '')).replace(/[^0-9]/g, '');
+        if (tDigits && (tDigits.includes(phone) || phone.includes(tDigits))) return true;
+      }
+      return false;
+    });
 
-    const hasCompletedTx = userTxs.some((t) => t.status === 'completed');
+    const completedTx = userTxs.find((t) => t.status === 'completed');
+    const pendingTx = userTxs.find((t) => t.status === 'pending');
 
     let resolvedSub = student?.subscription || null;
-    if (hasCompletedTx) {
-      const completedTx = userTxs.find((t) => t.status === 'completed')!;
+
+    if (completedTx || student?.subscription?.status === 'active') {
+      const activeTx = completedTx || userTxs[0];
       const expireDate = new Date();
       expireDate.setMonth(expireDate.getMonth() + 4);
       resolvedSub = {
         status: 'active' as const,
-        planId: completedTx.planId || 'plan-termly',
-        planName: completedTx.planName || 'One Semester Full Pass',
-        amountPaid: completedTx.amount || 300,
-        paymentMethod: completedTx.paymentMethod || 'CBE / Telebirr',
-        transactionId: completedTx.referenceNo,
-        screenshotUrl: completedTx.screenshotUrl || '',
-        screenshotName: completedTx.screenshotName || 'Payment_Receipt.jpg',
-        activatedAt: completedTx.createdAt || new Date().toISOString().split('T')[0],
+        planId: activeTx?.planId || student?.subscription?.planId || 'plan-termly',
+        planName: activeTx?.planName || student?.subscription?.planName || 'One Semester Full Pass',
+        amountPaid: activeTx?.amount || student?.subscription?.amountPaid || 300,
+        paymentMethod: activeTx?.paymentMethod || student?.subscription?.paymentMethod || 'CBE / Telebirr',
+        transactionId: activeTx?.referenceNo || student?.subscription?.transactionId || 'ACT-' + Date.now(),
+        screenshotUrl: activeTx?.screenshotUrl || student?.subscription?.screenshotUrl || '',
+        screenshotName: activeTx?.screenshotName || student?.subscription?.screenshotName || 'Payment_Receipt.jpg',
+        activatedAt: activeTx?.createdAt || student?.subscription?.activatedAt || new Date().toISOString().split('T')[0],
         expiresAt: expireDate.toISOString().split('T')[0]
+      };
+    } else if (pendingTx || student?.subscription?.status === 'pending_verification') {
+      const pTx = pendingTx || userTxs[0];
+      const expireDate = new Date();
+      expireDate.setMonth(expireDate.getMonth() + 4);
+      resolvedSub = {
+        status: 'pending_verification' as const,
+        planId: pTx?.planId || student?.subscription?.planId || 'plan-termly',
+        planName: pTx?.planName || student?.subscription?.planName || 'One Semester Full Pass',
+        amountPaid: pTx?.amount || student?.subscription?.amountPaid || 300,
+        paymentMethod: pTx?.paymentMethod || student?.subscription?.paymentMethod || 'CBE / Telebirr',
+        transactionId: pTx?.referenceNo || student?.subscription?.transactionId || 'PEND-' + Date.now(),
+        screenshotUrl: pTx?.screenshotUrl || student?.subscription?.screenshotUrl || '',
+        screenshotName: pTx?.screenshotName || student?.subscription?.screenshotName || 'Payment_Receipt.jpg',
+        activatedAt: pTx?.createdAt || student?.subscription?.activatedAt || new Date().toISOString().split('T')[0],
+        expiresAt: expireDate.toISOString().split('T')[0]
+      };
+    }
+
+    if (!student && userTxs.length > 0) {
+      const primaryTx = userTxs[0];
+      student = {
+        id: primaryTx.userId || userId || ('student-' + Date.now()),
+        email: primaryTx.userEmail || email || 'student@smartstudy.edu',
+        name: primaryTx.userName || 'Student',
+        role: 'student',
+        subscription: resolvedSub || undefined,
+        createdAt: primaryTx.createdAt || new Date().toISOString().split('T')[0]
       };
     }
 

@@ -166,16 +166,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 )}
               </button>
-            ) : (
-              <button
-                onClick={onOpenAuthModal}
-                className="text-slate-400 hover:text-amber-300 text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800/60 flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Teacher Guduru Admin Portal Access"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-400/70" />
-                <span className="hidden lg:inline text-[11px]">Instructor</span>
-              </button>
-            )}
+            ) : null}
           </nav>
 
           {/* Right Action Bar */}
@@ -435,17 +426,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
               <span className="text-[10px] mt-0.5 font-bold">Admin</span>
             </button>
-          ) : (
-            <button
-              type="button"
-              id="mobile-bottom-nav-instructor"
-              onClick={onOpenAuthModal}
-              className="flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all flex-1 cursor-pointer touch-manipulation text-slate-400 hover:text-amber-300"
-            >
-              <ShieldAlert className="w-4 h-4 text-amber-400/70" />
-              <span className="text-[10px] mt-0.5">Instructor</span>
-            </button>
-          )}
+          ) : null}
         </div>
       </nav>
     </header>
