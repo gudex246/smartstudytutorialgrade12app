@@ -92,6 +92,8 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [isSharingEmail, setIsSharingEmail] = useState(false);
   const [emailShareNotice, setEmailShareNotice] = useState<string | null>(null);
+  const [serverDeliveryState, setServerDeliveryState] = useState<'success' | 'delayed' | 'retrying'>('success');
+  const [lastSubmittedTx, setLastSubmittedTx] = useState<any>(null);
 
   if (!isOpen) return null;
 
@@ -102,6 +104,21 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   if (appliedPromo && appliedPromo.isActive) {
     finalPrice = Math.max(0, Math.round(finalPrice * (1 - appliedPromo.discountPercentage / 100)));
   }
+
+  const handleRetryServerDelivery = async () => {
+    if (!lastSubmittedTx) return;
+    setServerDeliveryState('retrying');
+    try {
+      const res = await submitPaymentReceiptToServer(lastSubmittedTx);
+      if (res.success) {
+        setServerDeliveryState('success');
+      } else {
+        setServerDeliveryState('delayed');
+      }
+    } catch {
+      setServerDeliveryState('delayed');
+    }
+  };
 
   const handleCheckApprovalStatus = async () => {
     setIsCheckingStatus(true);
@@ -297,6 +314,8 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     // 1. Deliver directly to server API for Admin Guduru Alemayehu
     let deliveredTx: any = txPayload;
     let deliveredSub = pendingSub;
+    setLastSubmittedTx(txPayload);
+
     try {
       const serverResult = await submitPaymentReceiptToServer(txPayload);
       if (serverResult.success && serverResult.transaction) {
@@ -307,9 +326,13 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
             screenshotUrl: serverResult.transaction.screenshotUrl
           };
         }
+        setServerDeliveryState('success');
+      } else {
+        setServerDeliveryState('delayed');
       }
     } catch (netErr) {
       console.warn('Network issue delivering to server, queued in local store:', netErr);
+      setServerDeliveryState('delayed');
     }
 
     // 2. Register in client storage so state is preserved
@@ -456,14 +479,39 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
             </div>
 
             {/* Delivery Confirmation */}
-            <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-2xl p-4 max-w-md mx-auto text-center space-y-2 shadow-lg">
-              <div className="flex items-center justify-center gap-2 text-emerald-300 font-extrabold text-xs">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Payment Slip Received &amp; Transmitted</span>
+            <div className={`rounded-2xl p-4 max-w-md mx-auto text-center space-y-2.5 shadow-lg border ${
+              serverDeliveryState === 'success'
+                ? 'bg-emerald-500/10 border-emerald-500/40'
+                : 'bg-amber-500/10 border-amber-500/50'
+            }`}>
+              <div className="flex items-center justify-center gap-2 font-extrabold text-xs">
+                {serverDeliveryState === 'success' ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-300">✓ Delivered to Teacher Guduru's Admin Dashboard!</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4 text-amber-400" />
+                    <span className="text-amber-300">Saved on Device • Network Sync Pending</span>
+                  </>
+                )}
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Your receipt screenshot has been saved securely on the server and delivered to Teacher Guduru Alemayehu's review queue. Once Teacher Guduru checks and confirms your transfer, your semester pass will be activated automatically.
+                {serverDeliveryState === 'success'
+                  ? "Your receipt is queued for Admin Guduru Alemayehu's review. Once confirmed, full semester access activates immediately."
+                  : "Due to internet connectivity, please tap below to retry server sync, or forward your receipt directly to Teacher Guduru on WhatsApp or Telegram."}
               </p>
+              {serverDeliveryState === 'delayed' && (
+                <button
+                  type="button"
+                  onClick={handleRetryServerDelivery}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md cursor-pointer transition-transform active:scale-95 inline-flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry Server Sync Now</span>
+                </button>
+              )}
             </div>
 
             {/* Direct Mobile Forwarding Options */}
@@ -471,11 +519,11 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               <div className="flex items-center justify-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                 <p className="text-xs font-bold text-white">
-                  Send Screenshot Directly to Teacher Guduru
+                  Direct Contact with Teacher Guduru
                 </p>
               </div>
               <p className="text-[11px] text-slate-300">
-                Send your screenshot directly to speed up verification and unlock your semester pass immediately:
+                You can also message or call Teacher Guduru directly to activate your pass instantly:
               </p>
 
               {emailShareNotice && (
@@ -485,31 +533,40 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 </div>
               )}
 
-              {/* Primary 1-Tap Mobile Share Button (Natively attaches file to Gmail/Mail) */}
-              <button
-                type="button"
-                onClick={handleShareScreenshotToAdminEmail}
-                disabled={isSharingEmail}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-indigo-600/30 touch-manipulation active:scale-98"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>{isSharingEmail ? 'Opening Device Share...' : 'Send Screenshot via Gmail / Mail'}</span>
-              </button>
-
-              {/* Secondary Quick Action Grid */}
+              {/* Primary Action Buttons Grid */}
               <div className="grid grid-cols-2 gap-2 pt-1">
-                {/* Direct WhatsApp Forward */}
+                {/* WhatsApp */}
                 <a
-                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect my screenshot in your Admin Dashboard and activate my semester access.`)}`}
+                  href={`https://wa.me/251953201048?text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment of ${finalPrice} ETB for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Channel: ${paymentChannel === 'cbe' ? 'CBE 1000521750255' : 'Telebirr 0953201048'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect my screenshot and activate my semester access.`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-emerald-600/20"
                 >
                   <Smartphone className="w-3.5 h-3.5" />
-                  <span>Send on WhatsApp</span>
+                  <span>WhatsApp Guduru</span>
                 </a>
 
-                {/* Direct Gmail Webmail link */}
+                {/* Direct Call / SMS */}
+                <a
+                  href="tel:+251953201048"
+                  className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-blue-600/20"
+                >
+                  <PhoneCall className="w-3.5 h-3.5" />
+                  <span>Call 0953201048</span>
+                </a>
+
+                {/* Telegram Forward */}
+                <a
+                  href={`https://t.me/share/url?url=${encodeURIComponent('https://smartstudy.edu')}&text=${encodeURIComponent(`Hello Teacher Guduru Alemayehu, I have submitted my payment receipt for Smart Study Tutorial.\n\nStudent: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nAmount: ${finalPrice} ETB\nRef: ${completedTxRef || 'SUBMITTED'}\n\nPlease verify in Admin Dashboard.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-sky-600/20"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Telegram</span>
+                </a>
+
+                {/* Gmail Link */}
                 <a
                   href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(`Payment Receipt Verification - ${senderPhoneOrName || currentUser.name} (${finalPrice} ETB)`)}&body=${encodeURIComponent(`Hello Teacher Guduru Alemayehu,\n\nI have submitted my payment receipt for Smart Study Tutorial.\n\nStudent Name: ${senderPhoneOrName || currentUser.name}\nPhone: ${senderPhone || 'Attached'}\nPlan: ${selectedPlan.name}\nAmount: ${finalPrice} ETB\nPayment Method: ${paymentChannel === 'cbe' ? 'CBE Bank (1000521750255)' : 'Telebirr (0953201048)'}\nReference: ${completedTxRef || 'SUBMITTED'}\n\nPlease inspect in your Admin Dashboard and grant access.\nThank you!`)}`}
                   target="_blank"
@@ -517,7 +574,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                   className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
                 >
                   <Mail className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Open Gmail</span>
+                  <span>Email Admin</span>
                 </a>
               </div>
 

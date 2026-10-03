@@ -26,7 +26,11 @@ import {
   Check,
   ShieldAlert,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  PhoneCall,
+  Smartphone,
+  Send,
+  UserCheck
 } from 'lucide-react';
 import {
   Question,
@@ -106,6 +110,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Search and filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [studentLookupQuery, setStudentLookupQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('All');
   const [selectedYear, setSelectedYear] = useState<string>('All');
 
@@ -832,6 +837,85 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const pendingTransactions = transactions.filter((t) => t.status === 'pending');
   const transactionsWithScreenshot = transactions.filter((t) => !!t.screenshotUrl);
 
+  // Combined list of all pending student payment verifications
+  const pendingVerifications = useMemo(() => {
+    const list: Array<{
+      id: string;
+      txId?: string;
+      studentId?: string;
+      userName: string;
+      userEmail: string;
+      amount: number;
+      currency: string;
+      planName: string;
+      paymentMethod: string;
+      screenshotUrl?: string;
+      screenshotName?: string;
+      referenceNo?: string;
+      createdAt: string;
+      phone?: string;
+      source: 'tx' | 'student';
+    }> = [];
+
+    const seenKeys = new Set<string>();
+
+    // 1. Transactions with status === 'pending'
+    transactions.forEach((tx) => {
+      if (tx.status === 'pending') {
+        const refKey = (tx.referenceNo || tx.id).toLowerCase();
+        seenKeys.add(refKey);
+        if (tx.userEmail) seenKeys.add(tx.userEmail.toLowerCase());
+        const rawPhone = (tx.userName + ' ' + (tx.userEmail || '')).match(/(09\d{8}|\+251\d{9})/)?.[0] || '';
+        list.push({
+          id: tx.id,
+          txId: tx.id,
+          studentId: tx.userId,
+          userName: tx.userName,
+          userEmail: tx.userEmail,
+          amount: tx.amount || 300,
+          currency: tx.currency || 'ETB ',
+          planName: tx.planName || 'One Semester Full Pass',
+          paymentMethod: tx.paymentMethod || 'CBE / Telebirr',
+          screenshotUrl: tx.screenshotUrl,
+          screenshotName: tx.screenshotName,
+          referenceNo: tx.referenceNo,
+          createdAt: tx.createdAt,
+          phone: rawPhone,
+          source: 'tx'
+        });
+      }
+    });
+
+    // 2. Students with subscription.status === 'pending_verification'
+    students.forEach((s) => {
+      if (s.subscription?.status === 'pending_verification') {
+        const sRef = (s.subscription.transactionId || '').toLowerCase();
+        const sEmail = (s.email || '').toLowerCase();
+        if ((!sRef || !seenKeys.has(sRef)) && (!sEmail || !seenKeys.has(sEmail))) {
+          const rawPhone = (s.name + ' ' + (s.email || '')).match(/(09\d{8}|\+251\d{9})/)?.[0] || '';
+          list.push({
+            id: s.id,
+            studentId: s.id,
+            userName: s.name,
+            userEmail: s.email,
+            amount: s.subscription.amountPaid || 300,
+            currency: 'ETB ',
+            planName: s.subscription.planName || 'One Semester Full Pass',
+            paymentMethod: s.subscription.paymentMethod || 'CBE / Telebirr',
+            screenshotUrl: s.subscription.screenshotUrl,
+            screenshotName: s.subscription.screenshotName,
+            referenceNo: s.subscription.transactionId,
+            createdAt: s.subscription.activatedAt || s.createdAt || new Date().toISOString().split('T')[0],
+            phone: rawPhone,
+            source: 'student'
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [transactions, students]);
+
   const filteredReceipts = useMemo(() => {
     return transactions.filter((t) => {
       const q = searchQuery.toLowerCase();
@@ -856,6 +940,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return true;
     });
   }, [transactions, searchQuery, receiptFilter]);
+
+  const matchingLookupStudents = useMemo(() => {
+    if (!studentLookupQuery.trim()) return [];
+    const q = studentLookupQuery.trim().toLowerCase();
+    const qDigits = q.replace(/[^0-9]/g, '');
+    return students.filter((s) => {
+      const sName = (s.name || '').toLowerCase();
+      const sEmail = (s.email || '').toLowerCase();
+      const sPhoneDigits = (s.name + ' ' + (s.email || '')).replace(/[^0-9]/g, '');
+      if (sName.includes(q)) return true;
+      if (sEmail.includes(q)) return true;
+      if (qDigits.length >= 3 && sPhoneDigits.includes(qDigits)) return true;
+      return false;
+    }).slice(0, 8);
+  }, [students, studentLookupQuery]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -934,7 +1033,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* High-Priority Pending Payment Verification Alert Banner */}
-      {pendingTransactions.length > 0 && (
+      {pendingVerifications.length > 0 && (
         <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-slate-900 border-2 border-amber-500 rounded-3xl p-5 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 font-black flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/30">
@@ -943,7 +1042,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-extrabold text-base text-white">
-                  {pendingTransactions.length} Student Payment {pendingTransactions.length === 1 ? 'Screenshot' : 'Screenshots'} Awaiting Your Approval!
+                  {pendingVerifications.length} Student Payment {pendingVerifications.length === 1 ? 'Screenshot' : 'Screenshots'} Awaiting Your Approval!
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
                   ACTION REQUIRED
@@ -964,7 +1063,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/30 cursor-pointer transition-transform hover:scale-105 shrink-0"
           >
             <Eye className="w-4 h-4" />
-            <span>Review Receipts Now ({pendingTransactions.length})</span>
+            <span>Review Receipts Now ({pendingVerifications.length})</span>
           </button>
         </div>
       )}
@@ -994,9 +1093,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         >
           <Camera className="w-4 h-4" />
           <span>Payment Screenshots</span>
-          {pendingTransactions.length > 0 ? (
+          {pendingVerifications.length > 0 ? (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 animate-bounce">
-              {pendingTransactions.length} Pending
+              {pendingVerifications.length} Pending
             </span>
           ) : (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-900 text-amber-300 border border-amber-500/40">
@@ -1055,9 +1154,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         >
           <CreditCard className="w-4 h-4" />
           <span>Fee Plans & Students ({students.length})</span>
-          {pendingTransactions.length > 0 && (
+          {pendingVerifications.length > 0 && (
             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-slate-950 animate-pulse">
-              {pendingTransactions.length} Pending
+              {pendingVerifications.length} Pending
             </span>
           )}
         </button>
@@ -1124,7 +1223,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           {/* Pending Payment Verification Cards in Overview */}
-          {pendingTransactions.length > 0 && (
+          {pendingVerifications.length > 0 && (
             <div className="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2.5">
@@ -1132,8 +1231,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Clock className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-white">Pending Student Payment Receipts</h3>
-                    <p className="text-[11px] text-slate-400">Inspect screenshot slips and approve access</p>
+                    <h3 className="font-bold text-sm text-white">Pending Student Payment Receipts ({pendingVerifications.length})</h3>
+                    <p className="text-[11px] text-slate-400">Inspect screenshot slips and click &quot;Approve &amp; Activate&quot; to grant access</p>
                   </div>
                 </div>
                 <button
@@ -1150,74 +1249,99 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {pendingTransactions.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="bg-slate-950/80 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
-                      {tx.screenshotUrl ? (
-                        <div
-                          onClick={() => setInspectingTx(tx)}
-                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/50 shrink-0 cursor-pointer relative group"
-                          title="Click to view full screenshot"
-                        >
-                          <img
-                            src={tx.screenshotUrl}
-                            alt="Receipt thumbnail"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Eye className="w-4 h-4 text-white" />
+                {pendingVerifications.map((item) => {
+                  const itemTx: PaymentTransaction = {
+                    id: item.txId || item.id,
+                    userId: item.studentId || item.id,
+                    userEmail: item.userEmail,
+                    userName: item.userName,
+                    planId: 'plan-termly',
+                    planName: item.planName,
+                    amount: item.amount,
+                    currency: item.currency || 'ETB ',
+                    paymentMethod: item.paymentMethod,
+                    status: 'pending',
+                    referenceNo: item.referenceNo || item.id,
+                    screenshotUrl: item.screenshotUrl,
+                    screenshotName: item.screenshotName,
+                    createdAt: item.createdAt
+                  };
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-slate-950/80 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
+                        {item.screenshotUrl ? (
+                          <div
+                            onClick={() => setInspectingTx(itemTx)}
+                            className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/50 shrink-0 cursor-pointer relative group"
+                            title="Click to view full screenshot"
+                          >
+                            <img
+                              src={item.screenshotUrl}
+                              alt="Receipt thumbnail"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <Eye className="w-4 h-4 text-white" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 text-slate-500">
+                            <ImageIcon className="w-6 h-6" />
+                          </div>
+                        )}
+
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-white truncate">{item.userName}</span>
+                            <span className="px-2 py-0.2 rounded-full text-[9px] font-extrabold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                              Pending Verification
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 font-mono truncate">{item.userEmail}</p>
+                          <div className="flex items-center gap-3 text-xs pt-0.5">
+                            <span className="text-amber-300 font-bold">{item.currency || 'ETB '}{item.amount}</span>
+                            <span className="text-slate-400 truncate">{item.paymentMethod}</span>
+                            {item.referenceNo && (
+                              <span className="text-[10px] text-indigo-300 font-mono">Ref: {item.referenceNo}</span>
+                            )}
                           </div>
                         </div>
-                      ) : (
-                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 text-slate-500">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                      )}
-
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-white truncate">{tx.userName}</span>
-                          <span className="px-2 py-0.2 rounded-full text-[9px] font-extrabold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
-                            Pending Verification
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-mono truncate">{tx.userEmail}</p>
-                        <div className="flex items-center gap-3 text-xs pt-0.5">
-                          <span className="text-amber-300 font-bold">{tx.currency || 'ETB '}{tx.amount}</span>
-                          <span className="text-slate-400 truncate">{tx.paymentMethod}</span>
-                          {tx.referenceNo && (
-                            <span className="text-[10px] text-indigo-300 font-mono">Ref: {tx.referenceNo}</span>
-                          )}
-                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800">
-                      {tx.screenshotUrl && (
+                      <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800">
+                        {item.screenshotUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setInspectingTx(itemTx)}
+                            className="flex-1 sm:flex-none px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Inspect Receipt</span>
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => setInspectingTx(tx)}
-                          className="flex-1 sm:flex-none px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                          onClick={() => {
+                            if (item.txId) {
+                              handleApprovePayment(item.txId);
+                            } else if (item.studentId) {
+                              handleApproveStudentDirectly(item.studentId);
+                            }
+                          }}
+                          className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Inspect Receipt</span>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Approve & Activate</span>
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleApprovePayment(tx.id)}
-                        className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Approve & Activate</span>
-                      </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1271,10 +1395,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <th className="py-2.5 px-3">Method</th>
                     <th className="py-2.5 px-3">Payment Receipt</th>
                     <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3 text-right">Status & Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {transactions.slice(0, 5).map((t) => (
+                  {transactions.slice(0, 8).map((t) => (
                     <tr key={t.id} className="hover:bg-slate-800/40">
                       <td className="py-2.5 px-3 font-medium text-white">{t.userName} <span className="text-slate-400 block text-[10px]">{t.userEmail}</span></td>
                       <td className="py-2.5 px-3 text-indigo-300">{t.planName}</td>
@@ -1295,6 +1420,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         )}
                       </td>
                       <td className="py-2.5 px-3 text-slate-400">{t.createdAt}</td>
+                      <td className="py-2.5 px-3 text-right">
+                        {t.status === 'pending' ? (
+                          <div className="inline-flex items-center gap-1.5 justify-end">
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              Pending
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleApprovePayment(t.id)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                            >
+                              <Check className="w-3 h-3" />
+                              <span>Verify</span>
+                            </button>
+                          </div>
+                        ) : t.status === 'rejected' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            Rejected
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            Active
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

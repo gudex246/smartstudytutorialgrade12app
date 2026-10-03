@@ -927,10 +927,7 @@ app.post('/api/payments/submit', (req, res) => {
 
     // Save uploaded screenshot as a static image file on disk
     const hostedScreenshotUrl = saveScreenshotFile(screenshotUrl || '', 'receipt');
-    // Retain dataUrl if provided so image is permanently preserved in JSON across container resets
-    const finalScreenshotUrl = (screenshotUrl && typeof screenshotUrl === 'string' && screenshotUrl.startsWith('data:'))
-      ? screenshotUrl
-      : (hostedScreenshotUrl || screenshotUrl || '');
+    const finalScreenshotUrl = hostedScreenshotUrl || screenshotUrl || '';
 
     // Subscription status is strictly PENDING until Admin Guduru Alemayehu verifies the screenshot
     const pendingSub = {

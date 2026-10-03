@@ -139,7 +139,7 @@
     "paymentMethod": "CBE Bank (Acc: 1000521750255)",
     "status": "completed",
     "referenceNo": "SST-998877",
-    "screenshotUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"500\"><rect width=\"100%\" height=\"100%\" fill=\"%236b21a8\"/><text x=\"20\" y=\"40\" fill=\"white\">CBE Transfer 300 ETB</text><text x=\"20\" y=\"80\" fill=\"white\">Ref: SST-998877</text></svg>",
+    "screenshotUrl": "/api/uploads/receipt_1790936883530_r7w4o.svg",
     "screenshotName": "CBE_Payment_Slip.svg",
     "createdAt": "2026-10-02"
   }

@@ -257,6 +257,37 @@ export const ReceiptViewerModal: React.FC<ReceiptViewerModalProps> = ({
             </div>
           )}
         </div>
+
+        {/* Mobile Sticky Bottom Action Bar for Instant Verification */}
+        {isPending && (
+          <div className="md:hidden p-3 bg-slate-950/95 border-t border-slate-800 flex items-center gap-2 z-10 shrink-0">
+            {onReject && (
+              <button
+                type="button"
+                onClick={() => {
+                  onReject();
+                  onClose();
+                }}
+                className="py-2.5 px-3 bg-slate-800 hover:bg-rose-900/30 text-rose-300 border border-slate-700 font-semibold rounded-xl text-xs transition-colors shrink-0 cursor-pointer"
+              >
+                Reject
+              </button>
+            )}
+            {onApprove && (
+              <button
+                type="button"
+                onClick={() => {
+                  onApprove();
+                  onClose();
+                }}
+                className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/30 active:scale-98 cursor-pointer"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Verify & Grant Full Access</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

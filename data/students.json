@@ -11,7 +11,7 @@
       "amountPaid": 300,
       "paymentMethod": "CBE Bank (Acc: 1000521750255)",
       "transactionId": "SST-998877",
-      "screenshotUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"500\"><rect width=\"100%\" height=\"100%\" fill=\"%236b21a8\"/><text x=\"20\" y=\"40\" fill=\"white\">CBE Transfer 300 ETB</text><text x=\"20\" y=\"80\" fill=\"white\">Ref: SST-998877</text></svg>",
+      "screenshotUrl": "/api/uploads/receipt_tadesse_student_1790936286537_48yv.svg",
       "screenshotName": "CBE_Payment_Slip.svg",
       "activatedAt": "2026-10-02",
       "expiresAt": "2027-02-02"
@@ -30,7 +30,7 @@
       "amountPaid": 300,
       "paymentMethod": "CBE Bank (Acc: 1000521750255)",
       "transactionId": "SST-718647",
-      "screenshotUrl": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'600'%20height%3D'750'%20viewBox%3D'0%200%20600%20750'%3E%0A%20%20%3Crect%20width%3D'100%25'%20height%3D'100%25'%20fill%3D'%23581c87'%2F%3E%0A%20%20%3Crect%20x%3D'15'%20y%3D'15'%20width%3D'570'%20height%3D'720'%20rx%3D'18'%20fill%3D'%23ffffff'%2F%3E%0A%20%20%3Crect%20x%3D'15'%20y%3D'15'%20width%3D'570'%20height%3D'90'%20rx%3D'18'%20fill%3D'%236b21a8'%2F%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'55'%20fill%3D'%23ffffff'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'22'%3ECommercial%20Bank%20of%20Ethiopia%20(CBE)%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'82'%20fill%3D'%23e9d5ff'%20font-family%3D'sans-serif'%20font-size%3D'13'%3EMobile%20Banking%20Payment%20Advice%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'145'%20fill%3D'%2315803d'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'15'%3E%E2%9C%93%20Transaction%20Successful%3C%2Ftext%3E%0A%20%20%3Cline%20x1%3D'40'%20y1%3D'165'%20x2%3D'560'%20y2%3D'165'%20stroke%3D'%23e2e8f0'%20stroke-width%3D'1.5'%2F%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'200'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3EBeneficiary%20Account%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'200'%20fill%3D'%230f172a'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'14'%20text-anchor%3D'end'%3E1000521750255%20(Guduru%20Alemayehu)%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'240'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3ETransferred%20Amount%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'240'%20fill%3D'%237e22ce'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'18'%20text-anchor%3D'end'%3EETB%20300.00%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'280'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3EPayer%20%2F%20Student%20Name%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'280'%20fill%3D'%230f172a'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'14'%20text-anchor%3D'end'%3EAbdi%20Futasa%20(0945342343)%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'320'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3ETransaction%20Reference%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'320'%20fill%3D'%230369a1'%20font-family%3D'monospace'%20font-weight%3D'bold'%20font-size%3D'14'%20text-anchor%3D'end'%3ESST-718647%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'360'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3EPayment%20Purpose%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'360'%20fill%3D'%230f172a'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'13'%20text-anchor%3D'end'%3ESmart%20Study%20One%20Semester%20Pass%3C%2Ftext%3E%0A%20%20%3Cline%20x1%3D'40'%20y1%3D'390'%20x2%3D'560'%20y2%3D'390'%20stroke%3D'%23e2e8f0'%20stroke-width%3D'1.5'%2F%3E%0A%20%20%3Crect%20x%3D'40'%20y%3D'410'%20width%3D'520'%20height%3D'70'%20rx%3D'12'%20fill%3D'%23faf5ff'%20stroke%3D'%23d8b4fe'%2F%3E%0A%20%20%3Ctext%20x%3D'60'%20y%3D'440'%20fill%3D'%236b21a8'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'13'%3EQueued%20for%20Teacher%20Guduru%20Alemayehu%20Verification%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'60'%20y%3D'462'%20fill%3D'%237e22ce'%20font-family%3D'sans-serif'%20font-size%3D'12'%3ESubmitted%20via%20Smart%20Study%20PWA%20App%3C%2Ftext%3E%0A%3C%2Fsvg%3E",
+      "screenshotUrl": "/api/uploads/receipt_abdi_student_abdifutasa.svg",
       "screenshotName": "Screenshot 2025-10-31 191042.jpg",
       "activatedAt": "2026-10-01",
       "expiresAt": "2027-02-01"
@@ -49,7 +49,7 @@
       "amountPaid": 300,
       "paymentMethod": "CBE Bank (Acc: 1000521750255)",
       "transactionId": "SST-345699",
-      "screenshotUrl": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'600'%20height%3D'750'%20viewBox%3D'0%200%20600%20750'%3E%0A%20%20%3Crect%20width%3D'100%25'%20height%3D'100%25'%20fill%3D'%2315803d'%2F%3E%0A%20%20%3Crect%20x%3D'15'%20y%3D'15'%20width%3D'570'%20height%3D'720'%20rx%3D'18'%20fill%3D'%23ffffff'%2F%3E%0A%20%20%3Crect%20x%3D'15'%20y%3D'15'%20width%3D'570'%20height%3D'90'%20rx%3D'18'%20fill%3D'%2316a34a'%2F%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'55'%20fill%3D'%23ffffff'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'22'%3Etelebirr%20Payment%20Advice%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'82'%20fill%3D'%23bbf7d0'%20font-family%3D'sans-serif'%20font-size%3D'13'%3EEthio%20Telecom%20Mobile%20Money%20Transfer%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'145'%20fill%3D'%2315803d'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'15'%3E%E2%9C%93%20Transfer%20Complete%3C%2Ftext%3E%0A%20%20%3Cline%20x1%3D'40'%20y1%3D'165'%20x2%3D'560'%20y2%3D'165'%20stroke%3D'%23e2e8f0'%20stroke-width%3D'1.5'%2F%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'200'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3EReceiver%20Account%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'200'%20fill%3D'%230f172a'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'14'%20text-anchor%3D'end'%3E0953201048%20(Guduru%20Alemayehu)%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'240'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3ETransferred%20Amount%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'240'%20fill%3D'%2316a34a'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'18'%20text-anchor%3D'end'%3EETB%20300.00%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'280'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3ESender%20%2F%20Student%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'280'%20fill%3D'%230f172a'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'14'%20text-anchor%3D'end'%3EChala%20(0987654323)%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'320'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3Etelebirr%20Transaction%20No%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'320'%20fill%3D'%230369a1'%20font-family%3D'monospace'%20font-weight%3D'bold'%20font-size%3D'14'%20text-anchor%3D'end'%3ESST-345699%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'40'%20y%3D'360'%20fill%3D'%2364748b'%20font-family%3D'sans-serif'%20font-size%3D'13'%3EFee%20Purpose%3A%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'560'%20y%3D'360'%20fill%3D'%230f172a'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'13'%20text-anchor%3D'end'%3EOne%20Semester%20Full%20Pass%20(Grade%2012)%3C%2Ftext%3E%0A%20%20%3Cline%20x1%3D'40'%20y1%3D'390'%20x2%3D'560'%20y2%3D'390'%20stroke%3D'%23e2e8f0'%20stroke-width%3D'1.5'%2F%3E%0A%20%20%3Crect%20x%3D'40'%20y%3D'410'%20width%3D'520'%20height%3D'70'%20rx%3D'12'%20fill%3D'%23f0fdf4'%20stroke%3D'%2386efac'%2F%3E%0A%20%20%3Ctext%20x%3D'60'%20y%3D'440'%20fill%3D'%2315803d'%20font-family%3D'sans-serif'%20font-weight%3D'bold'%20font-size%3D'13'%3EAttached%20to%20Admin%20Verification%20Queue%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D'60'%20y%3D'462'%20fill%3D'%2316a34a'%20font-family%3D'sans-serif'%20font-size%3D'12'%3ESubmitted%20via%20Smart%20Study%20Tutorial%20App%3C%2Ftext%3E%0A%3C%2Fsvg%3E",
+      "screenshotUrl": "/api/uploads/receipt_chala_student_chalaabdi.svg",
       "screenshotName": "photo_2025-11-26_14-37-53.jpg",
       "activatedAt": "2026-10-01",
       "expiresAt": "2027-02-01"
@@ -87,7 +87,7 @@
       "amountPaid": 300,
       "paymentMethod": "CBE",
       "transactionId": "TX-369647",
-      "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "screenshotUrl": "/api/uploads/receipt_student_student_1790843010355.png",
       "screenshotName": "test.png",
       "activatedAt": "2026-10-01",
       "expiresAt": "2027-02-01"
@@ -106,7 +106,7 @@
       "amountPaid": 300,
       "paymentMethod": "CBE Bank (1000521750255)",
       "transactionId": "SST-PC-889900",
-      "screenshotUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"300\"><rect width=\"100%\" height=\"100%\" fill=\"%237e22ce\"/><text x=\"20\" y=\"50\" fill=\"white\" font-size=\"20\">CBE PC Upload Test</text></svg>",
+      "screenshotUrl": "/api/uploads/receipt_pc_student_1790507470758.svg",
       "screenshotName": "Payment_Receipt.jpg",
       "activatedAt": "2026-09-27",
       "expiresAt": "2027-01-27"
@@ -125,7 +125,7 @@
       "amountPaid": 300,
       "paymentMethod": "CBE",
       "transactionId": "TX-347888",
-      "screenshotUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"300\"><rect width=\"100%\" height=\"100%\" fill=\"%231e293b\"/><text x=\"20\" y=\"50\" fill=\"white\" font-size=\"18\">CBE Receipt (Verified)</text></svg>",
+      "screenshotUrl": "/api/uploads/receipt_nginx_student_1790507268334.svg",
       "screenshotName": "Payment_Receipt.jpg",
       "activatedAt": "2026-09-27",
       "expiresAt": "2027-01-27"
@@ -144,7 +144,7 @@
       "amountPaid": 300,
       "paymentMethod": "Telebirr",
       "transactionId": "TX-200512",
-      "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==",
+      "screenshotUrl": "/api/uploads/receipt_test_student_1790507188712.png",
       "screenshotName": "Payment_Receipt.jpg",
       "activatedAt": "2026-09-27",
       "expiresAt": "2027-01-27"
@@ -163,7 +163,7 @@
       "amountPaid": 300,
       "paymentMethod": "CBE Bank (1000521750255)",
       "transactionId": "SST-998877",
-      "screenshotUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"600\" height=\"800\" viewBox=\"0 0 600 800\"><rect width=\"100%\" height=\"100%\" fill=\"%23f8fafc\"/><rect x=\"20\" y=\"20\" width=\"560\" height=\"760\" rx=\"16\" fill=\"%23ffffff\" stroke=\"%23cbd5e1\" stroke-width=\"2\"/><rect x=\"20\" y=\"20\" width=\"560\" height=\"90\" rx=\"16\" fill=\"%237e22ce\"/><text x=\"50\" y=\"60\" fill=\"%23ffffff\" font-family=\"sans-serif\" font-weight=\"bold\" font-size=\"22\">COMMERCIAL BANK OF ETHIOPIA</text><text x=\"50\" y=\"88\" fill=\"%23e9d5ff\" font-family=\"sans-serif\" font-size=\"14\">CBEBirr Transfer Receipt - Customer Advice</text><text x=\"50\" y=\"160\" fill=\"%2364748b\" font-family=\"sans-serif\" font-size=\"13\">TRANSFER DETAILS</text><text x=\"50\" y=\"195\" fill=\"%23334155\" font-family=\"sans-serif\" font-size=\"15\">Sender Student:</text><text x=\"240\" y=\"195\" fill=\"%230f172a\" font-family=\"sans-serif\" font-weight=\"bold\" font-size=\"16\">bare cawe</text><text x=\"50\" y=\"235\" fill=\"%23334155\" font-family=\"sans-serif\" font-size=\"15\">Beneficiary:</text><text x=\"240\" y=\"235\" fill=\"%230f172a\" font-family=\"sans-serif\" font-weight=\"bold\" font-size=\"16\">Guduru Alemayehu</text><text x=\"50\" y=\"275\" fill=\"%23334155\" font-family=\"sans-serif\" font-size=\"15\">CBE Account No:</text><text x=\"240\" y=\"275\" fill=\"%237e22ce\" font-family=\"monospace\" font-weight=\"bold\" font-size=\"16\">1000521750255</text><text x=\"50\" y=\"315\" fill=\"%23334155\" font-family=\"sans-serif\" font-size=\"15\">Transferred Amount:</text><text x=\"240\" y=\"315\" fill=\"%2316a34a\" font-family=\"sans-serif\" font-weight=\"bold\" font-size=\"22\">300.00 ETB</text><text x=\"50\" y=\"355\" fill=\"%23334155\" font-family=\"sans-serif\" font-size=\"15\">Reason / Package:</text><text x=\"240\" y=\"355\" fill=\"%230f172a\" font-family=\"sans-serif\" font-weight=\"600\" font-size=\"15\">One Semester Full Pass</text><text x=\"50\" y=\"395\" fill=\"%23334155\" font-family=\"sans-serif\" font-size=\"15\">Transaction Ref:</text><text x=\"240\" y=\"395\" fill=\"%232563eb\" font-family=\"monospace\" font-weight=\"bold\" font-size=\"16\">SST-TX-998877</text><text x=\"50\" y=\"435\" fill=\"%23334155\" font-family=\"sans-serif\" font-size=\"15\">Transaction Date:</text><text x=\"240\" y=\"435\" fill=\"%23334155\" font-family=\"sans-serif\" font-size=\"15\">2026-09-25 10:35:12</text><rect x=\"50\" y=\"470\" width=\"500\" height=\"2\" fill=\"%23e2e8f0\"/><rect x=\"50\" y=\"500\" width=\"500\" height=\"80\" rx=\"12\" fill=\"%23fef9c3\" stroke=\"%23facc15\"/><text x=\"70\" y=\"535\" fill=\"%23854d0e\" font-family=\"sans-serif\" font-weight=\"bold\" font-size=\"14\">STATUS: COMPLETED ON SENDER BANK</text><text x=\"70\" y=\"560\" fill=\"%23713f12\" font-family=\"sans-serif\" font-size=\"12\">Receipt submitted for Admin verification. Awaiting confirmation by Teacher Guduru.</text><text x=\"50\" y=\"640\" fill=\"%2394a3b8\" font-family=\"sans-serif\" font-size=\"11\">Smart Study Tutorial EUEE Prep • Official Payment Screenshot</text></svg>",
+      "screenshotUrl": "/api/uploads/receipt_bare_student_bare_cawe.svg",
       "screenshotName": "CBE_Payment_Receipt_bare_cawe.jpg",
       "activatedAt": "2026-09-30",
       "expiresAt": "2027-01-30"

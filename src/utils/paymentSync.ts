@@ -1,5 +1,5 @@
 import { PaymentTransaction, User } from '../types';
-import { syncServerTransactions, getTransactions } from './storage';
+import { syncServerTransactions, getTransactions, getStudents } from './storage';
 
 export interface PaymentStreamPayload {
   transaction?: PaymentTransaction;
@@ -146,5 +146,26 @@ export function subscribeToPaymentStream(
 }
 
 export function getPendingReceiptCount(): number {
-  return getTransactions().filter((t) => t.status === 'pending').length;
+  const txs = getTransactions();
+  const students = getStudents();
+  const pendingTx = txs.filter((t) => t.status === 'pending');
+  const seen = new Set<string>();
+  pendingTx.forEach((t) => {
+    if (t.id) seen.add(t.id.toLowerCase());
+    if (t.referenceNo) seen.add(t.referenceNo.toLowerCase());
+    if (t.userEmail) seen.add(t.userEmail.toLowerCase());
+  });
+  let count = pendingTx.length;
+  students.forEach((s) => {
+    if (s.subscription?.status === 'pending_verification') {
+      const sRef = (s.subscription.transactionId || '').toLowerCase();
+      const sEmail = (s.email || '').toLowerCase();
+      if ((!sRef || !seen.has(sRef)) && (!sEmail || !seen.has(sEmail))) {
+        count++;
+        if (sRef) seen.add(sRef);
+        if (sEmail) seen.add(sEmail);
+      }
+    }
+  });
+  return count;
 }

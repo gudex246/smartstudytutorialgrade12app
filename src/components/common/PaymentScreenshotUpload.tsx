@@ -38,9 +38,9 @@ export const PaymentScreenshotUpload: React.FC<PaymentScreenshotUploadProps> = (
   const handleFile = async (file: File) => {
     setErrorMessage(null);
 
-    const isImageMime = file.type && file.type.startsWith('image/');
-    const isImageExt = /\.(jpe?g|png|webp|gif|bmp|heic|jfif|svg)$/i.test(file.name || '');
-    if (!isImageMime && !isImageExt) {
+    const isImageMime = !file.type || file.type.startsWith('image/') || file.type === 'application/octet-stream';
+    const isImageExt = /\.(jpe?g|png|webp|gif|bmp|heic|heif|jfif|svg|raw)$/i.test(file.name || '');
+    if (!isImageMime && !isImageExt && file.type) {
       setErrorMessage('Please select a valid image file (PNG, JPG, JPEG, or WEBP).');
       return;
     }

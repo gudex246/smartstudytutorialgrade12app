@@ -55,9 +55,9 @@ export function downloadDataUrl(dataUrl: string, fileName = 'Payment_Receipt.jpg
 
 export async function processPaymentScreenshot(
   file: File,
-  maxWidth = 850,
-  maxHeight = 850,
-  quality = 0.68
+  maxWidth = 750,
+  maxHeight = 750,
+  quality = 0.60
 ): Promise<ProcessedImage> {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -80,8 +80,8 @@ export async function processPaymentScreenshot(
 
       const img = new Image();
       img.onerror = () => {
-        // If canvas image load fails (e.g. unknown format), accept dataUrl if it looks like image data
-        if (resultDataUrl.startsWith('data:image/') || file.type.startsWith('image/')) {
+        // If canvas image load fails (e.g. unknown format or iOS HEIC fallback), accept dataUrl
+        if (resultDataUrl.startsWith('data:image/') || (file.type && file.type.startsWith('image/')) || file.size > 0) {
           resolve({
             dataUrl: resultDataUrl,
             fileName: file.name || 'Payment_Receipt.jpg',
@@ -96,7 +96,7 @@ export async function processPaymentScreenshot(
         try {
           let { width, height } = img;
 
-          // Scale down if larger than max dimensions to ensure quick upload & clear receipt rendering
+          // Scale down if larger than max dimensions to ensure quick upload (<60KB) & clear receipt rendering
           if (width > maxWidth || height > maxHeight) {
             const ratio = Math.min(maxWidth / width, maxHeight / height);
             width = Math.max(1, Math.round(width * ratio));
@@ -118,31 +118,24 @@ export async function processPaymentScreenshot(
           }
 
           // Fill white background in case of transparent PNG
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, width, height);
 
-          // Render image onto canvas
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Export compressed JPEG
-          let compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-          let stringLength = compressedDataUrl.length - 'data:image/jpeg;base64,'.length;
-          let compressedBytes = Math.round((stringLength * 3) / 4);
+          // Export as optimized JPEG for instant transmission
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
 
-          // If still over 150KB, compress slightly more to guarantee fast transmission
-          if (compressedBytes > 150 * 1024) {
-            compressedDataUrl = canvas.toDataURL('image/jpeg', 0.52);
-            stringLength = compressedDataUrl.length - 'data:image/jpeg;base64,'.length;
-            compressedBytes = Math.round((stringLength * 3) / 4);
-          }
+          // Calculate approximate byte size of the base64 string
+          const approxBytes = Math.round((compressedDataUrl.length * 3) / 4);
 
           resolve({
             dataUrl: compressedDataUrl,
-            fileName: (file.name || 'Payment_Receipt.jpg').replace(/\.[^/.]+$/, '') + '.jpg',
-            fileSizeFormatted: formatFileSize(compressedBytes)
+            fileName: (file.name || 'Payment_Receipt').replace(/\.[^/.]+$/, '') + '.jpg',
+            fileSizeFormatted: formatFileSize(approxBytes)
           });
-        } catch {
-          // Fallback if canvas has issues on some mobile devices
+        } catch (canvasErr) {
+          console.warn('Canvas optimization fallback to original dataUrl:', canvasErr);
           resolve({
             dataUrl: resultDataUrl,
             fileName: file.name || 'Payment_Receipt.jpg',
@@ -157,4 +150,5 @@ export async function processPaymentScreenshot(
     reader.readAsDataURL(file);
   });
 }
+
 
